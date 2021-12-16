@@ -3,4 +3,4 @@ jdk:
 before_install:
   - chmod +x gradlew
 install:
-  - ./gradlew :libary:clean :libary:publishToMavenLocal
+  - ./gradlew :library:clean :library:publishToMavenLocal

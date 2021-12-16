@@ -49,7 +49,7 @@ class SampleInitializer : AndroidInitializer<String>() {
 - ### doInit
     初始化任务块,返回值会传递给子任务.
 ## 定义
-    在AndroidManifest.xml中定义provider
+在AndroidManifest.xml中定义provider
 ``` 
         <provider
             android:name="son.ysy.initializer.android.provider.StartupProvider"
