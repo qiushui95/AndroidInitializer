@@ -1,6 +1,6 @@
 package son.ysy.initializer.android
 
-import android.content.Context
+import android.app.Application
 import kotlinx.coroutines.CoroutineDispatcher
 
 interface Initializer<T> {
@@ -24,7 +24,7 @@ interface Initializer<T> {
     /**
      * 初始化任务
      */
-    fun doInit(context: Context): T
+    fun doInit(context: Application): T
 
     /**
      * 父任务完成回调

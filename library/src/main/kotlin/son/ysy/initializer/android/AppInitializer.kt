@@ -1,5 +1,6 @@
 package son.ysy.initializer.android
 
+import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
@@ -11,7 +12,7 @@ internal object AppInitializer {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    fun startInit(context: Context) = runBlocking {
+    fun startInit(context: Application) = runBlocking {
         val initializerMap = discoverStartUp(context)
 
         val childrenMap = dealInitializerChildren(initializerMap)
@@ -127,7 +128,7 @@ internal object AppInitializer {
     }
 
     private fun prepareJob(
-        context: Context,
+        context: Application,
         allInitializer: Map<String, Initializer<*>>,
         childrenMap: Map<String, List<Initializer<*>>>,
         depthMap: Map<Int, List<Initializer<*>>>

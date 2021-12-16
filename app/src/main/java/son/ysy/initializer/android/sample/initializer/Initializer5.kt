@@ -1,6 +1,6 @@
 package son.ysy.initializer.android.sample.initializer
 
-import android.content.Context
+import android.app.Application
 
 class Initializer5 : StringInitializer() {
 
@@ -9,7 +9,7 @@ class Initializer5 : StringInitializer() {
         Initializer4::class.java.name,
     )
 
-    override fun doInit(context: Context): String {
+    override fun doInit(context: Application): String {
         Thread.sleep(5000)
         return super.doInit(context)
     }

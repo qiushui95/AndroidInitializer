@@ -1,5 +1,6 @@
 package son.ysy.initializer.android.provider
 
+import android.app.Application
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
@@ -10,7 +11,9 @@ import son.ysy.initializer.android.AppInitializer
 internal class StartupProvider : ContentProvider() {
 
     override fun onCreate(): Boolean {
-        context?.apply(AppInitializer::startInit)
+
+        (context as? Application)?.apply(AppInitializer::startInit)
+
         return true
     }
 
