@@ -41,6 +41,8 @@ jobs:
           prerelease: false
       - name: 更新打包版本
         run: bash ./gradlew lib:updateVersion
+      - name: 设置版本环境变量
+        run: echo "VERSION_CUR=$(cat library/gradle.properties | grep -Po '\d+\.\d+\.\d+')">> $GITHUB_ENV
       - name: 提交版本更新记录
         uses: EndBug/add-and-commit@v7.4.0
         with:
