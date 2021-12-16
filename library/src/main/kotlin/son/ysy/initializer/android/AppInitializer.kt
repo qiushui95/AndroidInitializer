@@ -158,7 +158,11 @@ internal object AppInitializer {
                         }
                     }
 
-                    val childrenList = childrenMap[initializer.id] ?: return@launch
+                    val childrenList = childrenMap[initializer.id] ?: emptyList()
+
+                    if (childrenList.isEmpty()) {
+                        initializer.onAllChildrenCompleted()
+                    }
 
                     for (childInitializer in childrenList) {
                         if (initResult != null) childInitializer.onParentCompleted(
