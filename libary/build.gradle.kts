@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.AndroidLibrary
 import com.vanniktech.maven.publish.JavadocJar
+import org.jetbrains.kotlin.konan.properties.Properties
 
 plugins {
     id("com.android.library")
@@ -10,6 +11,28 @@ plugins {
 mavenPublishing {
     afterEvaluate {
         configure(AndroidLibrary(JavadocJar.Javadoc(), true))
+    }
+}
+
+task("updateVersion") {
+    doFirst {
+        val properties = Properties()
+
+        val file = file("gradle.properties")
+
+        properties.load(file.inputStream())
+
+        val oldVersionName = properties["VERSION_NAME"]?.toString() ?: "1.0.0"
+
+        val newVersion = oldVersionName.split(".")
+            .map { it.toInt() }
+            .run {
+                "${get(0)}.${get(1)}.${get(2) + 1}"
+            }
+
+        properties["VERSION_NAME"] = newVersion
+
+        properties.store(file.writer(), null)
     }
 }
 
