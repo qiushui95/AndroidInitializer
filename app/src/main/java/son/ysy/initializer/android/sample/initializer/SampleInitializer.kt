@@ -1,5 +1,6 @@
 package son.ysy.initializer.android.sample.initializer
 
+import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
 import son.ysy.initializer.android.AndroidInitializer
 
@@ -17,7 +18,7 @@ class SampleInitializer : AndroidInitializer<String>() {
         super.onAllChildrenCompleted()
     }
 
-    override fun doInit(): String {
+    override fun doInit(context: Context): String {
         Thread.sleep(3000)
 
         return "SampleInitializer.doInit执行完毕"

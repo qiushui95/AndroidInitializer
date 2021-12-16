@@ -18,7 +18,7 @@ internal object AppInitializer {
 
         val depthMap = dealInitializerDepth(initializerMap)
 
-        val jobMap = prepareJob(initializerMap, childrenMap, depthMap)
+        val jobMap = prepareJob(context, initializerMap, childrenMap, depthMap)
 
         depthMap[0]?.mapNotNull { jobMap[it.id] }
             ?.forEach { it.start() }
@@ -127,6 +127,7 @@ internal object AppInitializer {
     }
 
     private fun prepareJob(
+        context: Context,
         allInitializer: Map<String, Initializer<*>>,
         childrenMap: Map<String, List<Initializer<*>>>,
         depthMap: Map<Int, List<Initializer<*>>>
@@ -143,7 +144,7 @@ internal object AppInitializer {
                     }
 
                     val initJob = async(initializer.dispatcher) {
-                        initializer.doInit()
+                        initializer.doInit(context)
                     }
 
                     val initResult = initJob.await()

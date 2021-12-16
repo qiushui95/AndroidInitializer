@@ -1,5 +1,7 @@
 package son.ysy.initializer.android.sample.initializer
 
+import android.content.Context
+
 class Initializer5 : StringInitializer() {
 
     override val parentIdList: List<String> = listOf(
@@ -7,8 +9,8 @@ class Initializer5 : StringInitializer() {
         Initializer4::class.java.name,
     )
 
-    override fun doInit(): String {
+    override fun doInit(context: Context): String {
         Thread.sleep(5000)
-        return super.doInit()
+        return super.doInit(context)
     }
 }
