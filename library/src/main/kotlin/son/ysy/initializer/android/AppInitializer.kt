@@ -145,7 +145,10 @@ internal object AppInitializer {
                     }
 
                     val initJob = async(initializer.dispatcher) {
+                        Logger.printLog("${initializer.id}.doInit start")
+                        val startTime = System.nanoTime()
                         initializer.doInit(context)
+                        Logger.printLog("${initializer.id}.doInit cost${(System.nanoTime() - startTime) / 1000000}ms")
                     }
 
                     val initResult = initJob.await()
@@ -156,18 +159,25 @@ internal object AppInitializer {
                         val childrenList = childrenMap[parentInitializer.id] ?: continue
 
                         if (childrenList.all { it.id in completedIdList }) {
+                            Logger.printLog("${parentInitializer.id}.onAllChildrenCompleted start")
+                            val startTime = System.nanoTime()
+
                             parentInitializer.onAllChildrenCompleted()
+                            Logger.printLog("${parentInitializer.id}.onAllChildrenCompleted cost${(System.nanoTime() - startTime) / 1000000}ms")
                         }
                     }
 
                     val childrenList = childrenMap[initializer.id] ?: emptyList()
 
                     if (childrenList.isEmpty()) {
+                        Logger.printLog("${initializer.id}.onAllChildrenCompleted start")
+                        val startTime = System.nanoTime()
                         initializer.onAllChildrenCompleted()
+                        Logger.printLog("${initializer.id}.onAllChildrenCompleted cost${(System.nanoTime() - startTime) / 1000000}ms")
                     }
 
                     for (childInitializer in childrenList) {
-                        if (initResult != null) childInitializer.onParentCompleted(
+                        childInitializer.onParentCompleted(
                             initializer.id,
                             initResult
                         )

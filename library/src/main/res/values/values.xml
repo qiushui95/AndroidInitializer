@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="initializer_start_up">androidx.startup</string>
+    <string name="initializer_start_up_config">androidx.startup.config</string>
 </resources>
