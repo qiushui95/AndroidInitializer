@@ -5,7 +5,7 @@ import android.util.Log
 internal object Logger {
 
     fun printLog(msg: String) {
-        if (BuildConfig.DEBUG) {
+        if (InitializerCache.config.needPrintLog) {
             Log.d("===initializer===", msg)
         }
     }

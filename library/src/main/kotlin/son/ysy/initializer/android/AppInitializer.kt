@@ -46,32 +46,49 @@ internal object AppInitializer {
 
         val initializerValue = context.getString(R.string.initializer_start_up)
 
+        val configValue = context.getString(R.string.initializer_start_up_config)
+
         val initializerClass = Initializer::class.java
+        val configClass = InitializerConfig::class.java
 
         for (key in metadata.keySet()) {
             val value = metadata.getString(key) ?: continue
 
-            if (value != initializerValue) continue
+            if (value == initializerValue) {
+                val initializer = try {
+                    val clz = Class.forName(key)
 
-            val initializer = try {
-                val clz = Class.forName(key)
+                    if (!initializerClass.isAssignableFrom(clz)) continue
 
-                if (!initializerClass.isAssignableFrom(clz)) continue
+                    clz.getDeclaredConstructor().newInstance() as Initializer<*>
 
-                clz.getDeclaredConstructor().newInstance() as Initializer<*>
+                } catch (e: Exception) {
 
-            } catch (e: Exception) {
+                    throw InitializerException(e)
+                }
 
-                throw InitializerException(e)
+                val existedInitializer = result[initializer.id]
+
+                if (existedInitializer != null) {
+                    throw InitializerException("${existedInitializer.javaClass.name}和${initializer.javaClass.name}的id一样,需保证每个任务id不同")
+                }
+
+                result[initializer.id] = initializer
+
+            } else if (value == configValue) {
+                InitializerCache.config = try {
+
+                    val clz = Class.forName(key)
+
+                    if (!configClass.isAssignableFrom(clz)) continue
+
+                    clz.getDeclaredConstructor().newInstance() as InitializerConfig
+
+                } catch (e: Exception) {
+
+                    throw InitializerException(e)
+                }
             }
-
-            val existedInitializer = result[initializer.id]
-
-            if (existedInitializer != null) {
-                throw InitializerException("${existedInitializer.javaClass.name}和${initializer.javaClass.name}的id一样,需保证每个任务id不同")
-            }
-
-            result[initializer.id] = initializer
         }
 
         return result
