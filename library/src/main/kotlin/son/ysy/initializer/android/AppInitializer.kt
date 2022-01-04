@@ -4,76 +4,88 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
+import java.util.*
 
 internal object AppInitializer {
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-
     fun startInit(context: Application) = runBlocking {
-        val initializerMap = discoverStartUp(context)
+
+        val initializerClassSet = discoverInitializerClass(context)
+
+        val initializerMap = doInitializeAndDiscover(initializerClassSet)
+
+        val parentMap = dealInitializerParent(initializerMap)
 
         val childrenMap = dealInitializerChildren(initializerMap)
 
+        checkCycle(initializerMap, parentMap)
+
         val depthMap = dealInitializerDepth(initializerMap)
 
-        val jobMap = prepareJob(context, initializerMap, childrenMap, depthMap)
+        val jobMap = prepareJob(context, parentMap, childrenMap, depthMap)
 
-        depthMap[0]?.mapNotNull { jobMap[it.id] }
+        depthMap[0]
+            ?.mapNotNull { jobMap[it] }
             ?.forEach { it.start() }
 
-        initializerMap.values
-            .filter { it.needBlockingMain }
-            .onEach { jobMap[it.id]?.join() }
-            .asSequence()
-            .mapNotNull { childrenMap[it.id] }
+        depthMap.values
             .flatten()
-            .mapNotNull { jobMap[it.id] }.toList()
+            .filter { it.needBlockingMain }
+            .onEach {
+                Logger.printLog(
+                    "start join",
+                    it.id
+                )
+                jobMap[it]?.join()
+                Logger.printLog(
+                    "end join",
+                    it.id
+                )
+            }
+            .asSequence()
+            .mapNotNull { childrenMap[it] }
+            .flatten()
+            .mapNotNull { jobMap[it] }.toList()
             .forEach { it.join() }
     }
 
-    private fun discoverStartUp(context: Context): Map<String, Initializer<*>> {
+    private fun discoverInitializerClass(context: Context): Set<Class<*>> {
         val provider = ComponentName(context.packageName, StartupProvider::class.java.name)
 
         val providerInfo = context.packageManager
             .getProviderInfo(provider, PackageManager.GET_META_DATA)
 
-        val result = mutableMapOf<String, Initializer<*>>()
+        val classSet = mutableSetOf<Class<*>>()
 
-        val metadata = providerInfo.metaData ?: return result
+        val metadata = providerInfo.metaData ?: return classSet
 
         val initializerValue = context.getString(R.string.initializer_start_up)
+        val initializerClass = Initializer::class.java
 
         val configValue = context.getString(R.string.initializer_start_up_config)
-
-        val initializerClass = Initializer::class.java
         val configClass = InitializerConfig::class.java
 
         for (key in metadata.keySet()) {
             val value = metadata.getString(key) ?: continue
 
             if (value == initializerValue) {
-                val initializer = try {
+                try {
                     val clz = Class.forName(key)
 
                     if (!initializerClass.isAssignableFrom(clz)) continue
 
-                    clz.getDeclaredConstructor().newInstance() as Initializer<*>
-
+                    classSet.add(clz)
                 } catch (e: Exception) {
 
                     throw InitializerException(e)
                 }
 
-                val existedInitializer = result[initializer.id]
-
-                if (existedInitializer != null) {
-                    throw InitializerException("${existedInitializer.javaClass.name}和${initializer.javaClass.name}的id一样,需保证每个任务id不同")
-                }
-
-                result[initializer.id] = initializer
 
             } else if (value == configValue) {
                 InitializerCache.config = try {
@@ -91,25 +103,91 @@ internal object AppInitializer {
             }
         }
 
+        return classSet
+    }
+
+    private fun doInitializeAndDiscover(initializerClassSet: Set<Class<*>>): Map<String, Initializer<*>> {
+        val result = mutableMapOf<String, Initializer<*>>()
+
+        for (initializerClass in initializerClassSet) {
+            result.initialize(initializerClass)
+        }
+
         return result
     }
 
-    private fun dealInitializerChildren(initializerMap: Map<String, Initializer<*>>): Map<String, List<Initializer<*>>> {
-        val resultMapSet = mutableMapOf<String, MutableSet<Initializer<*>>>()
+    private fun MutableMap<String, Initializer<*>>.initialize(clz: Class<*>) {
+        if (containsKey(clz.name)) return
+
+        val initializer = try {
+            clz.getDeclaredConstructor().newInstance() as Initializer<*>
+        } catch (e: Exception) {
+            throw InitializerException(e)
+        }
+
+        put(clz.name, initializer)
+
+        initializer.parentClassNameList
+            .map { Class.forName(it) }
+            .forEach {
+                initialize(it)
+            }
+    }
+
+    private fun dealInitializerParent(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, List<Initializer<*>>> {
+        val result = mutableMapOf<Initializer<*>, List<Initializer<*>>>()
 
         for (initializer in initializerMap.values) {
-            for (parentInitializer in initializer.parentIdList.mapNotNull { initializerMap[it] }) {
-                resultMapSet.getOrPut(parentInitializer.id) { mutableSetOf() }
+
+            result[initializer] = initializer.parentClassNameList.mapNotNull { initializerMap[it] }
+        }
+
+        return result
+    }
+
+    private fun dealInitializerChildren(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, Set<Initializer<*>>> {
+        val result = mutableMapOf<Initializer<*>, MutableSet<Initializer<*>>>()
+
+        for (initializer in initializerMap.values) {
+            val parentInitializerList = initializer.parentClassNameList
+                .mapNotNull { initializerMap[it] }
+
+            for (parentInitializer in parentInitializerList) {
+                result.getOrPut(parentInitializer) { mutableSetOf() }
                     .add(initializer)
             }
         }
 
-        val result = mutableMapOf<String, List<Initializer<*>>>()
-
-        for (entry in resultMapSet) {
-            result[entry.key] = entry.value.toList()
-        }
         return result
+    }
+
+    private fun checkCycle(
+        initializerMap: Map<String, Initializer<*>>,
+        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
+    ) {
+        for (initializer in initializerMap.values) {
+            checkInitializerCycle(initializer, parentMap, emptyList())
+        }
+    }
+
+    private fun checkInitializerCycle(
+        initializer: Initializer<*>,
+        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
+        parentList: List<Initializer<*>>
+    ) {
+        val parentInitializerList = parentMap[initializer] ?: return
+
+        if (parentInitializerList.isEmpty()) return
+
+        for (parentInitializer in parentInitializerList) {
+            val curParentList = parentList + parentInitializer
+
+            if (parentInitializer in parentList) {
+                throw InitializerException("存在环依赖,依赖路径:${curParentList.joinToString("->") { it.javaClass.name }}")
+            }
+
+            checkInitializerCycle(parentInitializer, parentMap, curParentList)
+        }
     }
 
     private fun dealInitializerDepth(allInitializer: Map<String, Initializer<*>>): Map<Int, List<Initializer<*>>> {
@@ -117,7 +195,7 @@ internal object AppInitializer {
 
         allInitializer.values.forEach { tempMap.getInitializerDepth(it, allInitializer) }
 
-        val result = mutableMapOf<Int, MutableList<Initializer<*>>>()
+        val result = TreeMap<Int, MutableList<Initializer<*>>>()
 
         for (entry in tempMap) {
             val list = result.getOrPut(entry.value) { mutableListOf() }
@@ -125,7 +203,7 @@ internal object AppInitializer {
             allInitializer[entry.key]?.apply(list::add)
         }
 
-        return result.toSortedMap()
+        return result
     }
 
     private fun MutableMap<String, Int>.getInitializerDepth(
@@ -136,73 +214,94 @@ internal object AppInitializer {
 
         if (existedDepth != null) return existedDepth
 
-        if (initializer.parentIdList.isEmpty()) return getOrPut(initializer.id) { 0 }
+        val parentClassNameList = initializer.parentClassNameList
 
-        val parentDepth = initializer.parentIdList.mapNotNull { allInitializer[it] }
+        if (parentClassNameList.isEmpty()) return getOrPut(initializer.id) { 0 }
+
+        val parentDepth = parentClassNameList.mapNotNull { allInitializer[it] }
             .maxOf { getInitializerDepth(it, allInitializer) }
 
         return getOrPut(initializer.id) { parentDepth + 1 }
     }
 
-    private fun prepareJob(
+    private fun CoroutineScope.prepareJob(
         context: Application,
-        allInitializer: Map<String, Initializer<*>>,
-        childrenMap: Map<String, List<Initializer<*>>>,
+        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
+        childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
         depthMap: Map<Int, List<Initializer<*>>>
-    ): Map<String, Job> {
-        val result = mutableMapOf<String, Job>()
+    ): Map<Initializer<*>, Job> {
+        val result = mutableMapOf<Initializer<*>, Job>()
 
         val completedIdList = mutableListOf<String>()
 
+        val mutex = Mutex()
+
         for (initializer in depthMap.values.flatten()) {
-            result[initializer.id] =
-                scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
-                    for (parentId in initializer.parentIdList) {
-                        result[parentId]?.join()
-                    }
+            result[initializer] = launch(start = CoroutineStart.LAZY) {
+                val parentInitializerList = parentMap[initializer] ?: emptyList()
 
-                    val initJob = async(initializer.dispatcher) {
-                        Logger.printLog("${initializer.id}.doInit start")
-                        val startTime = System.nanoTime()
-                        initializer.doInit(context).apply {
-                            Logger.printLog("${initializer.id}.doInit cost${(System.nanoTime() - startTime) / 1000000}ms")
-                        }
-                    }
+                for (parentInitializer in parentInitializerList) {
+                    result[parentInitializer]?.join()
+                }
 
-                    val initResult = initJob.await()
+                val dispatcher = Dispatchers.Unconfined.takeIf {
+                    initializer.needRunOnMain
+                } ?: Dispatchers.IO
 
-                    completedIdList.add(initializer.id)
-
-                    for (parentInitializer in initializer.parentIdList.mapNotNull { allInitializer[it] }) {
-                        val childrenList = childrenMap[parentInitializer.id] ?: continue
-
-                        if (childrenList.all { it.id in completedIdList }) {
-                            Logger.printLog("${parentInitializer.id}.onAllChildrenCompleted start")
-                            val startTime = System.nanoTime()
-
-                            parentInitializer.onAllChildrenCompleted()
-                            Logger.printLog("${parentInitializer.id}.onAllChildrenCompleted cost${(System.nanoTime() - startTime) / 1000000}ms")
-                        }
-                    }
-
-                    val childrenList = childrenMap[initializer.id] ?: emptyList()
-
-                    if (childrenList.isEmpty()) {
-                        Logger.printLog("${initializer.id}.onAllChildrenCompleted start")
-                        val startTime = System.nanoTime()
-                        initializer.onAllChildrenCompleted()
-                        Logger.printLog("${initializer.id}.onAllChildrenCompleted cost${(System.nanoTime() - startTime) / 1000000}ms")
-                    }
-
-                    for (childInitializer in childrenList) {
-                        if (initResult != null) childInitializer.onParentCompleted(
-                            initializer.id,
-                            initResult
-                        )
-
-                        result[childInitializer.id]?.start()
+                val initJob = async(dispatcher) {
+                    StatisticsUtil.runWithStatistics("doInit", initializer.id) {
+                        initializer.doInit(context)
                     }
                 }
+
+                val initResult = initJob.await()
+
+                mutex.withLock {
+                    completedIdList.add(initializer.id)
+                }
+
+                for (parentInitializer in parentInitializerList) {
+                    val childrenList = childrenMap[parentInitializer] ?: continue
+
+                    val allChildrenCompleted = mutex.withLock {
+                        childrenList.all { it.id in completedIdList }
+                    }
+                    if (allChildrenCompleted) {
+                        StatisticsUtil.runWithStatistics(
+                            "children completed",
+                            parentInitializer.id
+                        ) {
+                            parentInitializer.onAllChildrenCompleted()
+                        }
+                    }
+                }
+
+                val childrenList = childrenMap[initializer] ?: emptyList()
+
+                if (childrenList.isEmpty()) {
+                    StatisticsUtil.runWithStatistics(
+                        "children completed",
+                        initializer.id
+                    ) {
+                        initializer.onAllChildrenCompleted()
+                    }
+                }
+
+                for (childInitializer in childrenList) {
+                    if (initResult != null) childInitializer.onParentCompleted(
+                        initializer.id,
+                        initResult
+                    )
+
+                    val allParentCompleted = mutex.withLock {
+                        childInitializer.parentClassNameList.all { it in completedIdList }
+                    }
+
+                    if (allParentCompleted) {
+                        result[childInitializer]?.start()
+                    }
+                }
+            }
         }
 
         return result

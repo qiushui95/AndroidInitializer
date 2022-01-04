@@ -4,9 +4,9 @@ import android.util.Log
 
 internal object Logger {
 
-    fun printLog(msg: String) {
+    fun printLog(tag: String, msg: String) {
         if (InitializerCache.config.needPrintLog) {
-            Log.d("===initializer===", msg)
+            Log.d("===initializer $tag===", msg)
         }
     }
 }

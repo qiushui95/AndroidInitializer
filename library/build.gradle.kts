@@ -60,8 +60,7 @@ android {
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.0-RC2")
-    compileOnly("androidx.startup:startup-runtime:1.1.0")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.3")

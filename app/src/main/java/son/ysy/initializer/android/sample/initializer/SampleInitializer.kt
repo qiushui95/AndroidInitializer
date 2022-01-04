@@ -1,13 +1,11 @@
 package son.ysy.initializer.android.sample.initializer
 
 import android.app.Application
-import kotlinx.coroutines.CoroutineDispatcher
 import son.ysy.initializer.android.AndroidInitializer
 
 class SampleInitializer : AndroidInitializer<String>() {
-    override val id: String = super.id
-    override val parentIdList: List<String> = super.parentIdList
-    override val dispatcher: CoroutineDispatcher = super.dispatcher
+
+    override val needRunOnMain: Boolean = super.needRunOnMain
     override val needBlockingMain: Boolean = super.needBlockingMain
 
     override fun onParentCompleted(parentId: String, result: Any) {

@@ -1,20 +1,21 @@
 package son.ysy.initializer.android
 
 import android.app.Application
-import kotlinx.coroutines.CoroutineDispatcher
 
-interface Initializer<T> {
+internal interface Initializer<T> {
+
     val id: String
 
     /**
-     * 需要依赖的上级任务id
+     * 所依赖的父任务class
+     * 当所有父任务完成后才执行该任务
      */
-    val parentIdList: List<String>
+    val parentClassNameList: List<String>
 
     /**
-     * 运行的协程Dispatcher
+     * 是否运行在主线程
      */
-    val dispatcher: CoroutineDispatcher
+    val needRunOnMain: Boolean
 
     /**
      * 是否需要阻塞主线程
