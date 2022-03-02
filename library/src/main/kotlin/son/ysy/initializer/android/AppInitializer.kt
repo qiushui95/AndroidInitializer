@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,7 +17,9 @@ internal object AppInitializer {
 
         val initializerClassSet = discoverInitializerClass(context)
 
-        val initializerMap = doInitializeAndDiscover(initializerClassSet)
+        val initializerMap = doInitialize(initializerClassSet)
+
+        checkInitializer(initializerMap)
 
         val parentMap = dealInitializerParent(initializerMap)
 
@@ -37,21 +38,7 @@ internal object AppInitializer {
         depthMap.values
             .flatten()
             .filter { it.needBlockingMain }
-            .onEach {
-                Logger.printLog(
-                    "start join",
-                    it.id
-                )
-                jobMap[it]?.join()
-                Logger.printLog(
-                    "end join",
-                    it.id
-                )
-            }
-            .asSequence()
-            .mapNotNull { childrenMap[it] }
-            .flatten()
-            .mapNotNull { jobMap[it] }.toList()
+            .mapNotNull { jobMap[it] }
             .forEach { it.join() }
     }
 
@@ -106,7 +93,7 @@ internal object AppInitializer {
         return classSet
     }
 
-    private fun doInitializeAndDiscover(initializerClassSet: Set<Class<*>>): Map<String, Initializer<*>> {
+    private fun doInitialize(initializerClassSet: Set<Class<*>>): Map<String, Initializer<*>> {
         val result = mutableMapOf<String, Initializer<*>>()
 
         for (initializerClass in initializerClassSet) {
@@ -116,8 +103,18 @@ internal object AppInitializer {
         return result
     }
 
+    private fun checkInitializer(initializerMap: Map<String, Initializer<*>>) {
+        for (initializer in initializerMap.values) {
+            for (parentId in initializer.parentIdList) {
+                if (!initializerMap.containsKey(parentId)) {
+                    throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
+                }
+            }
+        }
+
+    }
+
     private fun MutableMap<String, Initializer<*>>.initialize(clz: Class<*>) {
-        if (containsKey(clz.name)) return
 
         val initializer = try {
             clz.getDeclaredConstructor().newInstance() as Initializer<*>
@@ -125,13 +122,7 @@ internal object AppInitializer {
             throw InitializerException(e)
         }
 
-        put(clz.name, initializer)
-
-        initializer.parentClassNameList
-            .map { Class.forName(it) }
-            .forEach {
-                initialize(it)
-            }
+        put(initializer.id, initializer)
     }
 
     private fun dealInitializerParent(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, List<Initializer<*>>> {
@@ -139,7 +130,7 @@ internal object AppInitializer {
 
         for (initializer in initializerMap.values) {
 
-            result[initializer] = initializer.parentClassNameList.mapNotNull { initializerMap[it] }
+            result[initializer] = initializer.parentIdList.mapNotNull { initializerMap[it] }
         }
 
         return result
@@ -149,7 +140,7 @@ internal object AppInitializer {
         val result = mutableMapOf<Initializer<*>, MutableSet<Initializer<*>>>()
 
         for (initializer in initializerMap.values) {
-            val parentInitializerList = initializer.parentClassNameList
+            val parentInitializerList = initializer.parentIdList
                 .mapNotNull { initializerMap[it] }
 
             for (parentInitializer in parentInitializerList) {
@@ -214,7 +205,7 @@ internal object AppInitializer {
 
         if (existedDepth != null) return existedDepth
 
-        val parentClassNameList = initializer.parentClassNameList
+        val parentClassNameList = initializer.parentIdList
 
         if (parentClassNameList.isEmpty()) return getOrPut(initializer.id) { 0 }
 
@@ -249,9 +240,7 @@ internal object AppInitializer {
                 } ?: Dispatchers.IO
 
                 val initJob = async(dispatcher) {
-                    StatisticsUtil.runWithStatistics("doInit", initializer.id) {
-                        initializer.doInit(context)
-                    }
+                    initializer.doInit(context)
                 }
 
                 val initResult = initJob.await()
@@ -260,41 +249,14 @@ internal object AppInitializer {
                     completedIdList.add(initializer.id)
                 }
 
-                for (parentInitializer in parentInitializerList) {
-                    val childrenList = childrenMap[parentInitializer] ?: continue
-
-                    val allChildrenCompleted = mutex.withLock {
-                        childrenList.all { it.id in completedIdList }
-                    }
-                    if (allChildrenCompleted) {
-                        StatisticsUtil.runWithStatistics(
-                            "children completed",
-                            parentInitializer.id
-                        ) {
-                            parentInitializer.onAllChildrenCompleted()
-                        }
-                    }
-                }
-
-                val childrenList = childrenMap[initializer] ?: emptyList()
-
-                if (childrenList.isEmpty()) {
-                    StatisticsUtil.runWithStatistics(
-                        "children completed",
-                        initializer.id
-                    ) {
-                        initializer.onAllChildrenCompleted()
-                    }
-                }
-
-                for (childInitializer in childrenList) {
+                for (childInitializer in childrenMap[initializer] ?: emptySet()) {
                     if (initResult != null) childInitializer.onParentCompleted(
                         initializer.id,
                         initResult
                     )
 
                     val allParentCompleted = mutex.withLock {
-                        childInitializer.parentClassNameList.all { it in completedIdList }
+                        childInitializer.parentIdList.all { it in completedIdList }
                     }
 
                     if (allParentCompleted) {

@@ -24,9 +24,6 @@
             android:authorities="${applicationId}.androidx_start"
             android:exported="false">
             <meta-data
-                android:name="${packageName}.initializer.SampleInitializer"
-                android:value="@string/initializer_start_up" />
-            <meta-data
                 android:name="${packageName}.initializer.Initializer1"
                 android:value="@string/initializer_start_up" />
             <meta-data

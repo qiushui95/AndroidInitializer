@@ -13,12 +13,6 @@ abstract class StringInitializer : AndroidInitializer<String>() {
     }
 
     override fun onParentCompleted(parentId: String, result: Any) {
-        checkParentResult<String>(parentId, result) {
-            list.add(it)
-        }
-    }
-
-    override fun onAllChildrenCompleted() {
-        Log.e("====children ${javaClass.simpleName}=====", list.toString())
+        if (result is String) list.add(result)
     }
 }

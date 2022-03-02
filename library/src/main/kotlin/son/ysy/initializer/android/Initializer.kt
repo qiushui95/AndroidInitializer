@@ -10,7 +10,7 @@ internal interface Initializer<T> {
      * 所依赖的父任务class
      * 当所有父任务完成后才执行该任务
      */
-    val parentClassNameList: List<String>
+    val parentIdList: List<String>
 
     /**
      * 是否运行在主线程
@@ -31,9 +31,4 @@ internal interface Initializer<T> {
      * 父任务完成回调
      */
     fun onParentCompleted(parentId: String, result: Any)
-
-    /**
-     * 所有子任务完成回调
-     */
-    fun onAllChildrenCompleted()
 }

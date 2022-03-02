@@ -9,7 +9,5 @@ class Initializer2 : StringInitializer() {
 
     override val needBlockingMain: Boolean = true
 
-    override fun getParentKClassList(): List<KClass<out AndroidInitializer<*>>> {
-        return listOf(Initializer1::class)
-    }
+    override val parentIdList: List<String> = listOf(Initializer1::class.java.name)
 }

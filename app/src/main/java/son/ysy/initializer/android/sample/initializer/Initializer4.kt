@@ -5,7 +5,6 @@ import kotlin.reflect.KClass
 
 class Initializer4 : StringInitializer() {
 
-    override fun getParentKClassList(): List<KClass<out AndroidInitializer<*>>> {
-        return listOf(Initializer2::class, Initializer3::class)
-    }
+    override val parentIdList: List<String> =
+        listOf(Initializer2::class, Initializer3::class).map { it.java.name }
 }
