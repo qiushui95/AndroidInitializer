@@ -5,11 +5,12 @@ import son.ysy.initializer.android.AndroidInitializer
 import kotlin.reflect.KClass
 
 class Initializer5 : StringInitializer() {
-    override val parentIdList: List<String> =
-        listOf(Initializer3::class, Initializer4::class).map { it.java.name }
+    override val parentClassList: List<KClass<*>>
+        get() = listOf(Initializer3::class, Initializer4::class)
 
-    override fun doInit(context: Application): String {
-        Thread.sleep(5000)
-        return super.doInit(context)
+    override val needBlockingMain: Boolean = true
+
+    override fun doSomeThing(context: Application) {
+        Thread.sleep(2000)
     }
 }

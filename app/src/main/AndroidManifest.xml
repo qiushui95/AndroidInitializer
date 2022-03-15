@@ -38,6 +38,21 @@
             <meta-data
                 android:name="${packageName}.initializer.Initializer5"
                 android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer8"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer6"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer7"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer9"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer10"
+                android:value="@string/initializer_start_up" />
         </provider>
     </application>
 

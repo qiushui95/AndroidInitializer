@@ -5,15 +5,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
-import java.util.*
+import kotlin.coroutines.CoroutineContext
 
 internal object AppInitializer {
 
-    fun startInit(context: Application) = runBlocking {
+    private val initializerCoroutine = CoroutineScope(Dispatchers.Main)
+
+    fun startInit(context: Application) = runBlocking() {
 
         val initializerClassSet = discoverInitializerClass(context)
 
@@ -27,19 +27,14 @@ internal object AppInitializer {
 
         checkCycle(initializerMap, parentMap)
 
-        val depthMap = dealInitializerDepth(initializerMap)
+        val jobMap = initializerCoroutine
+            .prepareJob(context, coroutineContext, initializerMap, parentMap, childrenMap)
 
-        val jobMap = prepareJob(context, parentMap, childrenMap, depthMap)
-
-        depthMap[0]
-            ?.mapNotNull { jobMap[it] }
-            ?.forEach { it.start() }
-
-        depthMap.values
-            .flatten()
-            .filter { it.needBlockingMain }
-            .mapNotNull { jobMap[it] }
-            .forEach { it.join() }
+        jobMap.filterKeys { it.needBlockingMain }
+            .values
+            .forEach {
+                it.join()
+            }
     }
 
     private fun discoverInitializerClass(context: Context): Set<Class<*>> {
@@ -94,10 +89,19 @@ internal object AppInitializer {
     }
 
     private fun doInitialize(initializerClassSet: Set<Class<*>>): Map<String, Initializer<*>> {
-        val result = mutableMapOf<String, Initializer<*>>()
+
+        val list = mutableListOf<Initializer<*>>()
 
         for (initializerClass in initializerClassSet) {
-            result.initialize(initializerClass)
+            list.initialize(initializerClass)
+        }
+
+        list.sortBy { it.priority }
+
+        val result = mutableMapOf<String, Initializer<*>>()
+
+        list.forEach {
+            result[it.id] = it
         }
 
         return result
@@ -105,6 +109,7 @@ internal object AppInitializer {
 
     private fun checkInitializer(initializerMap: Map<String, Initializer<*>>) {
         for (initializer in initializerMap.values) {
+
             for (parentId in initializer.parentIdList) {
                 if (!initializerMap.containsKey(parentId)) {
                     throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
@@ -114,7 +119,7 @@ internal object AppInitializer {
 
     }
 
-    private fun MutableMap<String, Initializer<*>>.initialize(clz: Class<*>) {
+    private fun MutableList<Initializer<*>>.initialize(clz: Class<*>) {
 
         val initializer = try {
             clz.getDeclaredConstructor().newInstance() as Initializer<*>
@@ -122,14 +127,13 @@ internal object AppInitializer {
             throw InitializerException(e)
         }
 
-        put(initializer.id, initializer)
+        add(initializer)
     }
 
     private fun dealInitializerParent(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, List<Initializer<*>>> {
         val result = mutableMapOf<Initializer<*>, List<Initializer<*>>>()
 
         for (initializer in initializerMap.values) {
-
             result[initializer] = initializer.parentIdList.mapNotNull { initializerMap[it] }
         }
 
@@ -181,86 +185,53 @@ internal object AppInitializer {
         }
     }
 
-    private fun dealInitializerDepth(allInitializer: Map<String, Initializer<*>>): Map<Int, List<Initializer<*>>> {
-        val tempMap = mutableMapOf<String, Int>()
-
-        allInitializer.values.forEach { tempMap.getInitializerDepth(it, allInitializer) }
-
-        val result = TreeMap<Int, MutableList<Initializer<*>>>()
-
-        for (entry in tempMap) {
-            val list = result.getOrPut(entry.value) { mutableListOf() }
-
-            allInitializer[entry.key]?.apply(list::add)
-        }
-
-        return result
-    }
-
-    private fun MutableMap<String, Int>.getInitializerDepth(
-        initializer: Initializer<*>,
-        allInitializer: Map<String, Initializer<*>>
-    ): Int {
-        val existedDepth = get(initializer.id)
-
-        if (existedDepth != null) return existedDepth
-
-        val parentClassNameList = initializer.parentIdList
-
-        if (parentClassNameList.isEmpty()) return getOrPut(initializer.id) { 0 }
-
-        val parentDepth = parentClassNameList.mapNotNull { allInitializer[it] }
-            .maxOf { getInitializerDepth(it, allInitializer) }
-
-        return getOrPut(initializer.id) { parentDepth + 1 }
-    }
-
     private fun CoroutineScope.prepareJob(
         context: Application,
+        mainContext: CoroutineContext,
+        initializerMap: Map<String, Initializer<*>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
         childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
-        depthMap: Map<Int, List<Initializer<*>>>
     ): Map<Initializer<*>, Job> {
+
         val result = mutableMapOf<Initializer<*>, Job>()
 
-        val completedIdList = mutableListOf<String>()
+        val groupJobMap = mutableMapOf<String?, MutableList<Job>>()
 
-        val mutex = Mutex()
+        initializerMap.values.forEach { initializer ->
 
-        for (initializer in depthMap.values.flatten()) {
-            result[initializer] = launch(start = CoroutineStart.LAZY) {
-                val parentInitializerList = parentMap[initializer] ?: emptyList()
-
-                for (parentInitializer in parentInitializerList) {
-                    result[parentInitializer]?.join()
-                }
-
-                val dispatcher = Dispatchers.Unconfined.takeIf {
-                    initializer.needRunOnMain
-                } ?: Dispatchers.IO
-
-                val initJob = async(dispatcher) {
-                    initializer.doInit(context)
-                }
-
-                val initResult = initJob.await()
-
-                mutex.withLock {
-                    completedIdList.add(initializer.id)
-                }
-
-                for (childInitializer in childrenMap[initializer] ?: emptySet()) {
-                    if (initResult != null) childInitializer.onParentCompleted(
-                        initializer.id,
-                        initResult
-                    )
-
-                    val allParentCompleted = mutex.withLock {
-                        childInitializer.parentIdList.all { it in completedIdList }
+            val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                parentMap[initializer]
+                    ?.mapNotNull { result[it] }
+                    ?.forEach {
+                        it.join()
                     }
 
-                    if (allParentCompleted) {
-                        result[childInitializer]?.start()
+                val coroutineContext = if (initializer.needRunOnMain) {
+                    mainContext
+                } else {
+                    Dispatchers.IO
+                }
+
+                val initResult = withContext(coroutineContext) { initializer.doInit(context) }
+
+                childrenMap[initializer]?.forEach {
+                    it.onParentCompleted(initializer.id, initResult ?: Unit)
+                }
+            }
+
+            result[initializer] = job
+
+            groupJobMap.getOrPut(initializer.groupName) { mutableListOf() }.add(job)
+        }
+
+        groupJobMap.entries.forEach { entry ->
+            launch(Dispatchers.IO) {
+
+                entry.value.forEach {
+                    it.start()
+
+                    if (entry.key != null) {
+                        it.join()
                     }
                 }
             }
