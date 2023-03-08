@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import kotlinx.coroutines.*
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
@@ -13,7 +14,7 @@ internal object AppInitializer {
 
     private val initializerCoroutine = CoroutineScope(Dispatchers.Main)
 
-    fun startInit(context: Application) = runBlocking() {
+    fun startInit(context: Application) = runBlocking {
 
         val initializerClassSet = discoverInitializerClass(context)
 
@@ -40,8 +41,18 @@ internal object AppInitializer {
     private fun discoverInitializerClass(context: Context): Set<Class<*>> {
         val provider = ComponentName(context.packageName, StartupProvider::class.java.name)
 
-        val providerInfo = context.packageManager
-            .getProviderInfo(provider, PackageManager.GET_META_DATA)
+        val providerInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getProviderInfo(
+                provider,
+                PackageManager.ComponentInfoFlags.of(PackageManager.GET_META_DATA.toLong())
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getProviderInfo(
+                provider,
+                PackageManager.GET_META_DATA
+            )
+        }
 
         val classSet = mutableSetOf<Class<*>>()
 
@@ -49,9 +60,6 @@ internal object AppInitializer {
 
         val initializerValue = context.getString(R.string.initializer_start_up)
         val initializerClass = Initializer::class.java
-
-        val configValue = context.getString(R.string.initializer_start_up_config)
-        val configClass = InitializerConfig::class.java
 
         for (key in metadata.keySet()) {
             val value = metadata.getString(key) ?: continue
@@ -67,28 +75,13 @@ internal object AppInitializer {
 
                     throw InitializerException(e)
                 }
-
-
-            } else if (value == configValue) {
-                InitializerCache.config = try {
-
-                    val clz = Class.forName(key)
-
-                    if (!configClass.isAssignableFrom(clz)) continue
-
-                    clz.getDeclaredConstructor().newInstance() as InitializerConfig
-
-                } catch (e: Exception) {
-
-                    throw InitializerException(e)
-                }
             }
         }
 
         return classSet
     }
 
-    private fun doInitialize(initializerClassSet: Set<Class<*>>): Map<String, Initializer<*>> {
+    private fun doInitialize(initializerClassSet: Set<Class<*>>): Map<String, List<Initializer<*>>> {
 
         val list = mutableListOf<Initializer<*>>()
 
@@ -98,22 +91,34 @@ internal object AppInitializer {
 
         list.sortBy { it.priority }
 
-        val result = mutableMapOf<String, Initializer<*>>()
+        val result = mutableMapOf<String, MutableList<Initializer<*>>>()
 
         list.forEach {
-            result[it.id] = it
+            result.getOrPut(it.id) { mutableListOf() }.add(it)
         }
 
         return result
     }
 
-    private fun checkInitializer(initializerMap: Map<String, Initializer<*>>) {
-        for (initializer in initializerMap.values) {
+    private fun checkInitializer(initializerMap: Map<String, List<Initializer<*>>>) {
+
+        for (initializer in initializerMap.values.flatten()) {
 
             for (parentId in initializer.parentIdList) {
                 if (!initializerMap.containsKey(parentId)) {
                     throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
                 }
+            }
+        }
+
+        for (initializer in initializerMap.filterValues { it.size > 1 }.values.flatten()) {
+
+            if (initializer !is ShareIdInitializer) {
+                val sameIdInitializerStr = initializerMap[initializer.id]
+                    ?.filterNot { it == initializer }
+                    ?.joinToString(separator = ",") { it.javaClass.name }
+
+                throw InitializerException("initializer(${initializer.javaClass.name}) have same id with [$sameIdInitializerStr],if you want to use same id,please implements ShareIdInitializer.")
             }
         }
 
@@ -130,22 +135,23 @@ internal object AppInitializer {
         add(initializer)
     }
 
-    private fun dealInitializerParent(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, List<Initializer<*>>> {
+    private fun dealInitializerParent(initializerMap: Map<String, List<Initializer<*>>>): Map<Initializer<*>, List<Initializer<*>>> {
         val result = mutableMapOf<Initializer<*>, List<Initializer<*>>>()
 
-        for (initializer in initializerMap.values) {
-            result[initializer] = initializer.parentIdList.mapNotNull { initializerMap[it] }
+        for (initializer in initializerMap.values.flatten()) {
+            result[initializer] = initializer.parentIdList
+                .flatMap { initializerMap[it] ?: emptyList() }
         }
 
         return result
     }
 
-    private fun dealInitializerChildren(initializerMap: Map<String, Initializer<*>>): Map<Initializer<*>, Set<Initializer<*>>> {
+    private fun dealInitializerChildren(initializerMap: Map<String, List<Initializer<*>>>): Map<Initializer<*>, Set<Initializer<*>>> {
         val result = mutableMapOf<Initializer<*>, MutableSet<Initializer<*>>>()
 
-        for (initializer in initializerMap.values) {
+        for (initializer in initializerMap.values.flatten()) {
             val parentInitializerList = initializer.parentIdList
-                .mapNotNull { initializerMap[it] }
+                .flatMap { initializerMap[it] ?: emptyList() }
 
             for (parentInitializer in parentInitializerList) {
                 result.getOrPut(parentInitializer) { mutableSetOf() }
@@ -157,10 +163,10 @@ internal object AppInitializer {
     }
 
     private fun checkCycle(
-        initializerMap: Map<String, Initializer<*>>,
+        initializerMap: Map<String, List<Initializer<*>>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
     ) {
-        for (initializer in initializerMap.values) {
+        for (initializer in initializerMap.values.flatten()) {
             checkInitializerCycle(initializer, parentMap, emptyList())
         }
     }
@@ -188,7 +194,7 @@ internal object AppInitializer {
     private fun CoroutineScope.prepareJob(
         context: Application,
         mainContext: CoroutineContext,
-        initializerMap: Map<String, Initializer<*>>,
+        initializerMap: Map<String, List<Initializer<*>>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
         childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
     ): Map<Initializer<*>, Job> {
@@ -197,7 +203,7 @@ internal object AppInitializer {
 
         val groupJobMap = mutableMapOf<String?, MutableList<Job>>()
 
-        initializerMap.values.forEach { initializer ->
+        initializerMap.values.flatten().forEach { initializer ->
 
             val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
                 parentMap[initializer]
@@ -206,11 +212,7 @@ internal object AppInitializer {
                         it.join()
                     }
 
-                val coroutineContext = if (initializer.needRunOnMain) {
-                    mainContext
-                } else {
-                    Dispatchers.IO
-                }
+                val coroutineContext = initializer.dispatcher
 
                 val initResult = withContext(coroutineContext) { initializer.doInit(context) }
 

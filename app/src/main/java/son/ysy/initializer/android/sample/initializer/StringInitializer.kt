@@ -18,11 +18,11 @@ abstract class StringInitializer : AndroidInitializer<String>() {
 
     override fun doInit(context: Application): String {
 
-        Log.e("=====doInit====", "start $id,thread:${Thread.currentThread().name}")
+        Log.e("=====doInit====", "start $id,${javaClass.simpleName},thread:${Thread.currentThread().name}")
         doSomeThing(context)
-        Log.e("=====doInit====", "end $id,thread:${Thread.currentThread().name}")
+        Log.e("=====doInit====", "end $id,${javaClass.simpleName},thread:${Thread.currentThread().name}")
 
-        Log.e("=====parent params====", "$id,${parentIdList}")
+        Log.e("=====parent params====", "$id,${javaClass.simpleName},${parentIdList}")
 
         return id
     }

@@ -3,6 +3,7 @@ package son.ysy.initializer.android
 import android.app.Application
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.CoroutineContext
 
 internal interface Initializer<T> {
 
@@ -26,9 +27,9 @@ internal interface Initializer<T> {
     val parentIdList: List<String>
 
     /**
-     * 是否在主线程运行
+     * 运行在协程上下文
      */
-    val needRunOnMain: Boolean
+    val dispatcher: CoroutineContext
 
     /**
      * 是否需要阻塞主线程

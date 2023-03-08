@@ -1,5 +1,3 @@
-import com.vanniktech.maven.publish.AndroidLibrary
-import com.vanniktech.maven.publish.JavadocJar
 import org.jetbrains.kotlin.konan.properties.Properties
 
 plugins {
@@ -8,11 +6,11 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
-mavenPublishing {
-    afterEvaluate {
-        configure(AndroidLibrary(JavadocJar.Javadoc(), true))
-    }
-}
+//mavenPublishing {
+//    afterEvaluate {
+//        configure(AndroidLibrary(JavadocJar.Javadoc(), true))
+//    }
+//}
 
 task("updateVersion") {
     doFirst {
@@ -37,11 +35,10 @@ task("updateVersion") {
 }
 
 android {
-    compileSdk = 31
+    compileSdk = 33
 
     defaultConfig {
         minSdk = 16
-        targetSdk = 31
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -57,12 +54,13 @@ android {
     sourceSets {
         getByName("main").java.srcDir("src/main/kotlin")
     }
+    namespace = "son.ysy.initializer.android"
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.0")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.3")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.4.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }

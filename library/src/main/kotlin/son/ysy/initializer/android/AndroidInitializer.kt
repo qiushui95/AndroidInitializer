@@ -1,5 +1,8 @@
 package son.ysy.initializer.android
 
+import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.CoroutineContext
+
 abstract class AndroidInitializer<T> : Initializer<T> {
 
     override val id: String = javaClass.name
@@ -8,7 +11,7 @@ abstract class AndroidInitializer<T> : Initializer<T> {
 
     override val groupName: String? = null
 
-    override val needRunOnMain: Boolean = false
+    override val dispatcher: CoroutineContext = Dispatchers.IO
 
     override val needBlockingMain: Boolean = false
 }

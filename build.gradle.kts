@@ -5,9 +5,9 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.1.2")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.6.0")
-        classpath("com.vanniktech:gradle-maven-publish-plugin:0.18.0")
+        classpath("com.android.tools.build:gradle:7.4.2")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.10")
+        classpath("com.vanniktech:gradle-maven-publish-plugin:0.24.0")
     }
 }
 
