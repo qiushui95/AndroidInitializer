@@ -4,7 +4,7 @@ Android自动初始化框架
 ## 安装
 ``` kotlin dsl
 	dependencies {
-	        implementation("com.github.qiushui95:AndroidInitializer:1.0.9")
+	        implementation("com.github.qiushui95:AndroidInitializer:1.0.10")
 	}
 ```
 ## 继承
