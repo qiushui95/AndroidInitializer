@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import kotlinx.coroutines.*
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
@@ -28,8 +29,10 @@ internal object AppInitializer {
 
         checkCycle(initializerMap, parentMap)
 
+        logDepth(initializerMap, parentMap)
+
         val jobMap = initializerCoroutine
-            .prepareJob(context, coroutineContext, initializerMap, parentMap, childrenMap)
+            .prepareJob(context, initializerMap, parentMap, childrenMap)
 
         jobMap.filterKeys { it.needBlockingMain }
             .values
@@ -193,7 +196,6 @@ internal object AppInitializer {
 
     private fun CoroutineScope.prepareJob(
         context: Application,
-        mainContext: CoroutineContext,
         initializerMap: Map<String, List<Initializer<*>>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
         childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
@@ -240,5 +242,39 @@ internal object AppInitializer {
         }
 
         return result
+    }
+
+    private fun logDepth(
+        initializerMap: Map<String, List<Initializer<*>>>,
+        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
+    ) {
+        if (BuildConfig.DEBUG.not()) return
+
+        val allList = initializerMap.values.flatten().toMutableList()
+
+        val finishList = mutableListOf<Initializer<*>>()
+
+        var depth = 0
+
+        while (allList.size > 0) {
+
+            val curDepthList = mutableListOf<Initializer<*>>()
+
+            for (initializer in allList) {
+                val parentInitializer = parentMap[initializer]
+
+                if (parentInitializer == null || parentInitializer.all { it in finishList }) {
+                    curDepthList.add(initializer)
+                }
+            }
+
+            finishList.addAll(curDepthList)
+
+            allList.removeAll(curDepthList)
+
+            val curDepthStr = curDepthList.joinToString(",") { it.javaClass.name }
+
+            Log.d("--initializer--", "depth:${depth++}-->[$curDepthStr]")
+        }
     }
 }
