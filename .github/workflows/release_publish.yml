@@ -17,10 +17,12 @@ jobs:
         with:
           repository: qiushui95/GithubActionShell
           path: "sh"
+      - name: 设置ReadMe旧版本环境变量
+        run: bash ./sh/env_version.sh library/gradle.properties VERSION_OLD
+      - name: 更新打包版本
+        run: bash ./sh/update_version.sh library/gradle.properties
       - name: 设置版本环境变量
         run: bash ./sh/env_version.sh library/gradle.properties VERSION_CUR
-      - name: 设置ReadMe旧版本环境变量
-        run: bash ./sh/env_version.sh README.md VERSION_OLD
       - name: 更新ReadMe
         run: sed -i 's/${{env.VERSION_OLD}}/${{env.VERSION_CUR}}/g' README.md
       - name: 配置git
@@ -28,23 +30,10 @@ jobs:
       - name: 提交ReadMe更新记录
         run: |
           git add README.md
-          git commit -m "更新ReadMe版本号"
+          git library/gradle.properties
+          git commit -m "更新版本号"
           git tag ${{env.VERSION_CUR}}
           git push origin rel:master
-  release:
-    runs-on: ubuntu-latest
-    needs:
-      - read_me_version
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: master
-      - uses: actions/checkout@v2
-        with:
-          repository: qiushui95/GithubActionShell
-          path: "sh"
-      - name: 设置版本环境变量
-        run: bash ./sh/env_version.sh library/gradle.properties VERSION_CUR
       - name: Create Release
         uses: actions/create-release@v1
         env:
@@ -54,26 +43,3 @@ jobs:
           release_name: Release ${{env.VERSION_CUR}}
           draft: false
           prerelease: false
-  update_next_version:
-    needs:
-      - release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: master
-      - uses: actions/checkout@v2
-        with:
-          repository: qiushui95/GithubActionShell
-          path: "sh"
-      - name: 更新打包版本
-        run: bash ./sh/update_version.sh library/gradle.properties
-      - name: 设置版本环境变量
-        run: bash ./sh/env_version.sh library/gradle.properties LIB_VERSION
-      - name: 配置git
-        run: bash ./sh/git_config.sh
-      - name: 提交版本修改记录
-        run: |
-          git add library/gradle.properties
-          git commit -m "更新下次发布版本为${{env.LIB_VERSION}}"
-          git push origin master
