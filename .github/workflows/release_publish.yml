@@ -30,7 +30,7 @@ jobs:
       - name: 提交ReadMe更新记录
         run: |
           git add README.md
-          git library/gradle.properties
+          git add library/gradle.properties
           git commit -m "更新版本号"
           git tag ${{env.VERSION_CUR}}
           git push origin rel:master
