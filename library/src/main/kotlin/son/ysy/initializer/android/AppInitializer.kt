@@ -32,7 +32,7 @@ internal object AppInitializer {
         logDepth(initializerMap, parentMap)
 
         val jobMap = initializerCoroutine
-            .prepareJob(context, initializerMap, parentMap, childrenMap)
+            .prepareJob(context,coroutineContext, initializerMap, parentMap, childrenMap)
 
         jobMap.filterKeys { it.needBlockingMain }
             .values
@@ -196,6 +196,7 @@ internal object AppInitializer {
 
     private fun CoroutineScope.prepareJob(
         context: Application,
+        mainContext: CoroutineContext,
         initializerMap: Map<String, List<Initializer<*>>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
         childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
@@ -214,7 +215,11 @@ internal object AppInitializer {
                         it.join()
                     }
 
-                val coroutineContext = initializer.dispatcher
+                val coroutineContext = if (initializer.dispatcher == Dispatchers.Main) {
+                    mainContext
+                } else {
+                    initializer.dispatcher
+                }
 
                 val initResult = withContext(coroutineContext) { initializer.doInit(context) }
 
@@ -248,7 +253,6 @@ internal object AppInitializer {
         initializerMap: Map<String, List<Initializer<*>>>,
         parentMap: Map<Initializer<*>, List<Initializer<*>>>,
     ) {
-        if (BuildConfig.DEBUG.not()) return
 
         val allList = initializerMap.values.flatten().toMutableList()
 
