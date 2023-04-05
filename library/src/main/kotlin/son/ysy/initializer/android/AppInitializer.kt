@@ -13,6 +13,8 @@ import kotlin.coroutines.CoroutineContext
 
 internal object AppInitializer {
 
+    private const val LOG_TAG = "--initializer--"
+
     private val initializerCoroutine = CoroutineScope(Dispatchers.Main)
 
     fun startInit(context: Application) = runBlocking {
@@ -32,7 +34,7 @@ internal object AppInitializer {
         logDepth(initializerMap, parentMap)
 
         val jobMap = initializerCoroutine
-            .prepareJob(context,coroutineContext, initializerMap, parentMap, childrenMap)
+            .prepareJob(context, coroutineContext, initializerMap, parentMap, childrenMap)
 
         jobMap.filterKeys { it.needBlockingMain }
             .values
@@ -209,6 +211,12 @@ internal object AppInitializer {
         initializerMap.values.flatten().forEach { initializer ->
 
             val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                val startTime = System.currentTimeMillis()
+
+                val threadNameStr = "thread:${Thread.currentThread().name}"
+
+                Log.d(LOG_TAG, "start:${initializer.id}-->$threadNameStr")
+
                 parentMap[initializer]
                     ?.mapNotNull { result[it] }
                     ?.forEach {
@@ -222,6 +230,10 @@ internal object AppInitializer {
                 }
 
                 val initResult = withContext(coroutineContext) { initializer.doInit(context) }
+
+                val costTimeStr = "cost:${System.currentTimeMillis() - startTime}ms"
+
+                Log.d(LOG_TAG, "finish:${initializer.id}-->$costTimeStr-->$threadNameStr")
 
                 childrenMap[initializer]?.forEach {
                     it.onParentCompleted(initializer.id, initResult ?: Unit)
@@ -278,7 +290,7 @@ internal object AppInitializer {
 
             val curDepthStr = curDepthList.joinToString(",") { it.javaClass.name }
 
-            Log.d("--initializer--", "depth:${depth++}-->[$curDepthStr]")
+            Log.d(LOG_TAG, "depth:${depth++}-->[$curDepthStr]")
         }
     }
 }
