@@ -21,20 +21,20 @@ internal object AppInitializer {
 
         val initializerClassSet = discoverInitializerClass(context)
 
-        val initializerMap = doInitialize(initializerClassSet)
+        val initializerList = doInitialize(initializerClassSet)
 
-        checkInitializer(initializerMap)
+        checkSameId(initializerList)
 
-        val parentMap = dealInitializerParent(initializerMap)
+        val initializerIdMap = getInitializerIdMap(initializerList)
 
-        val childrenMap = dealInitializerChildren(initializerMap)
+        findParent(initializerList, initializerIdMap)
 
-        checkCycle(initializerMap, parentMap)
+        checkCycle(initializerList)
 
-        logDepth(initializerMap, parentMap)
+        logDepth(initializerList)
 
         val jobMap = initializerCoroutine
-            .prepareJob(context, coroutineContext, initializerMap, parentMap, childrenMap)
+            .prepareJob(context, coroutineContext, initializerList)
 
         jobMap.filterKeys { it.needBlockingMain }
             .values
@@ -64,7 +64,7 @@ internal object AppInitializer {
         val metadata = providerInfo.metaData ?: return classSet
 
         val initializerValue = context.getString(R.string.initializer_start_up)
-        val initializerClass = Initializer::class.java
+        val initializerClass = AndroidInitializer::class.java
 
         for (key in metadata.keySet()) {
             val value = metadata.getString(key) ?: continue
@@ -86,51 +86,10 @@ internal object AppInitializer {
         return classSet
     }
 
-    private fun doInitialize(initializerClassSet: Set<Class<*>>): Map<String, List<Initializer<*>>> {
-
-        val list = mutableListOf<Initializer<*>>()
-
-        for (initializerClass in initializerClassSet) {
-            list.initialize(initializerClass)
-        }
-
-        val result = mutableMapOf<String, MutableList<Initializer<*>>>()
-
-        list.forEach {
-            result.getOrPut(it.id) { mutableListOf() }.add(it)
-        }
-
-        return result
-    }
-
-    private fun checkInitializer(initializerMap: Map<String, List<Initializer<*>>>) {
-
-        for (initializer in initializerMap.values.flatten()) {
-
-            for (parentId in initializer.parentIdList) {
-                if (!initializerMap.containsKey(parentId)) {
-                    throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
-                }
-            }
-        }
-
-        for (initializer in initializerMap.filterValues { it.size > 1 }.values.flatten()) {
-
-            if (initializer !is ShareIdInitializer) {
-                val sameIdInitializerStr = initializerMap[initializer.id]
-                    ?.filterNot { it == initializer }
-                    ?.joinToString(separator = ",") { it.javaClass.name }
-
-                throw InitializerException("initializer(${initializer.javaClass.name}) have same id with [$sameIdInitializerStr],if you want to use same id,please implements ShareIdInitializer.")
-            }
-        }
-
-    }
-
-    private fun MutableList<Initializer<*>>.initialize(clz: Class<*>) {
+    private fun MutableList<AndroidInitializer<*>>.initialize(clz: Class<*>) {
 
         val initializer = try {
-            clz.getDeclaredConstructor().newInstance() as Initializer<*>
+            clz.getDeclaredConstructor().newInstance() as AndroidInitializer<*>
         } catch (e: Exception) {
             throw InitializerException(e)
         }
@@ -138,81 +97,127 @@ internal object AppInitializer {
         add(initializer)
     }
 
-    private fun dealInitializerParent(initializerMap: Map<String, List<Initializer<*>>>): Map<Initializer<*>, List<Initializer<*>>> {
-        val result = mutableMapOf<Initializer<*>, List<Initializer<*>>>()
+    private fun doInitialize(initializerClassSet: Set<Class<*>>): List<AndroidInitializer<*>> {
 
-        for (initializer in initializerMap.values.flatten()) {
-            result[initializer] = initializer.parentIdList
-                .flatMap { initializerMap[it] ?: emptyList() }
+        val list = mutableListOf<AndroidInitializer<*>>()
+
+        for (initializerClass in initializerClassSet) {
+            list.initialize(initializerClass)
         }
 
-        return result
+        return list
     }
 
-    private fun dealInitializerChildren(initializerMap: Map<String, List<Initializer<*>>>): Map<Initializer<*>, Set<Initializer<*>>> {
-        val result = mutableMapOf<Initializer<*>, MutableSet<Initializer<*>>>()
+    private fun getInitializerIdMap(initializerList: List<AndroidInitializer<*>>): Map<String, Set<AndroidInitializer<*>>> {
+        val resultMap = mutableMapOf<String, MutableSet<AndroidInitializer<*>>>()
 
-        for (initializer in initializerMap.values.flatten()) {
-            val parentInitializerList = initializer.parentIdList
-                .flatMap { initializerMap[it] ?: emptyList() }
-
-            for (parentInitializer in parentInitializerList) {
-                result.getOrPut(parentInitializer) { mutableSetOf() }
-                    .add(initializer)
+        for (initializer in initializerList) {
+            for (id in initializer.idList) {
+                resultMap.getOrPut(id) { mutableSetOf() }.add(initializer)
             }
         }
 
-        return result
+        return resultMap
     }
 
-    private fun checkCycle(
-        initializerMap: Map<String, List<Initializer<*>>>,
-        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
+    private fun checkSameId(initializerList: List<AndroidInitializer<*>>) {
+        val sameIdMap = initializerList.groupBy { it.id }.filterValues { it.size > 1 }
+
+        if (sameIdMap.isNotEmpty()) {
+            val msgList = mutableListOf<String>()
+
+            val sb = StringBuilder()
+
+            for (entry in sameIdMap.entries) {
+                sb.clear()
+
+                sb.append("same id(${entry.key}) used in [")
+                sb.append(entry.value.joinToString { it.javaClass.name })
+                sb.append("]")
+
+                msgList.add(sb.toString())
+            }
+
+            throw InitializerException("${msgList.joinToString("\n")}\nplease check!!")
+        }
+    }
+
+    private fun findParent(
+        initializerList: List<AndroidInitializer<*>>,
+        initializerIdMap: Map<String, Set<AndroidInitializer<*>>>
     ) {
-        for (initializer in initializerMap.values.flatten()) {
-            checkInitializerCycle(initializer, parentMap, emptyList())
+
+        for (initializer in initializerList) {
+            for (parentId in initializer.parentIdList) {
+
+                val parentInitializerSet = initializerIdMap[parentId]
+
+                if (parentInitializerSet == null) {
+                    throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
+                } else {
+                    initializer.parentInitializerSet.addAll(parentInitializerSet)
+                }
+            }
+        }
+
+        val groupMap = initializerList.groupBy { it.groupName }
+
+        for (list in groupMap.values) {
+            for (initializer in list) {
+                for (beforeInitializer in list.filter { it.groupSort < initializer.groupSort }) {
+                    initializer.parentInitializerSet.add(beforeInitializer)
+                }
+            }
+        }
+
+        for (initializer in initializerList) {
+            for (parentInitializer in initializer.parentInitializerSet) {
+                parentInitializer.childrenInitializerSet.add(initializer)
+            }
+        }
+    }
+
+    private fun checkCycle(initializerList: List<AndroidInitializer<*>>) {
+        for (initializer in initializerList) {
+            checkInitializerCycle(initializer.id, initializer, listOf(initializer))
         }
     }
 
     private fun checkInitializerCycle(
-        initializer: Initializer<*>,
-        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
-        parentList: List<Initializer<*>>
+        initializerId: String,
+        initializer: AndroidInitializer<*>,
+        dependencyList: List<AndroidInitializer<*>>
     ) {
-        val parentInitializerList = parentMap[initializer] ?: return
 
-        if (parentInitializerList.isEmpty()) return
+        for (parentInitializer in initializer.parentInitializerSet) {
+            val list = mutableListOf<AndroidInitializer<*>>()
 
-        for (parentInitializer in parentInitializerList) {
-            val curParentList = parentList + parentInitializer
+            list.addAll(dependencyList)
+            list.add(parentInitializer)
 
-            if (parentInitializer in parentList) {
-                throw InitializerException("存在环依赖,依赖路径:${curParentList.joinToString("->") { it.javaClass.name }}")
+            if (parentInitializer.id == initializerId) {
+                throw InitializerException("存在环依赖,依赖路径:${list.joinToString("->") { it.javaClass.name }}")
             }
 
-            checkInitializerCycle(parentInitializer, parentMap, curParentList)
+            checkInitializerCycle(initializerId, parentInitializer, list)
         }
     }
 
     private fun CoroutineScope.prepareJob(
         context: Application,
         mainContext: CoroutineContext,
-        initializerMap: Map<String, List<Initializer<*>>>,
-        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
-        childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
-    ): Map<Initializer<*>, Job> {
+        initializerList: List<AndroidInitializer<*>>,
+    ): Map<AndroidInitializer<*>, Job> {
 
-        val resultMap = mutableMapOf<Initializer<*>, Job>()
+        val resultMap = mutableMapOf<AndroidInitializer<*>, Job>()
 
-        initializerMap.values.flatten().forEach { initializer ->
+        initializerList.forEach { initializer ->
 
             val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
 
-                parentMap[initializer]
-                    ?.mapNotNull { resultMap[it] }
-                    ?.forEach {
-                        it.join()
-                    }
+                for (parentInitializer in initializer.parentInitializerSet) {
+                    resultMap[parentInitializer]?.join()
+                }
 
                 val coroutineContext = if (initializer.dispatcher == Dispatchers.Main) {
                     mainContext
@@ -236,8 +241,12 @@ internal object AppInitializer {
 
                 Log.d(LOG_TAG, "finish:${initializerKeyStr}-->$costTimeStr")
 
-                childrenMap[initializer]?.forEach {
-                    it.onParentCompleted(initializer.id, initResult ?: Unit)
+                for (childInitializer in initializer.childrenInitializerSet) {
+                    childInitializer.onParentCompleted(
+                        parentId = initializer.id,
+                        parentShareId = initializer.shareId,
+                        result = initResult ?: Unit
+                    )
                 }
             }
 
@@ -249,30 +258,23 @@ internal object AppInitializer {
         return resultMap
     }
 
-    private fun logDepth(
-        initializerMap: Map<String, List<Initializer<*>>>,
-        parentMap: Map<Initializer<*>, List<Initializer<*>>>,
-    ) {
+    private fun logDepth(initializerList: List<AndroidInitializer<*>>) {
 
-        val allList = initializerMap.values.flatten().toMutableList()
-
-        val finishList = mutableListOf<Initializer<*>>()
+        val allList = initializerList.toMutableList()
 
         var depth = 0
 
         while (allList.size > 0) {
 
-            val curDepthList = mutableListOf<Initializer<*>>()
+            val curDepthList = mutableListOf<AndroidInitializer<*>>()
 
             for (initializer in allList) {
-                val parentInitializer = parentMap[initializer]
 
-                if (parentInitializer == null || parentInitializer.all { it in finishList }) {
+                if (initializer.parentInitializerSet.none { it in allList }) {
                     curDepthList.add(initializer)
                 }
             }
 
-            finishList.addAll(curDepthList)
 
             allList.removeAll(curDepthList)
 

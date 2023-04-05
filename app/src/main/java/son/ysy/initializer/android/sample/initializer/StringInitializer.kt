@@ -30,7 +30,7 @@ abstract class StringInitializer : AndroidInitializer<String>() {
 
     abstract fun doSomeThing(context: Application)
 
-    override fun onParentCompleted(parentId: String, result: Any) {
+    override fun onParentCompleted(parentId: String, parentShareId: String?, result: Any) {
         if (result is String) list.add(result)
     }
 }

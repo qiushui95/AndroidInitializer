@@ -13,7 +13,7 @@ abstract class SingleParentInitializer<R, P : Any> : AndroidInitializer<R>() {
     }
 
     @Suppress("UNCHECKED_CAST")
-    final override fun onParentCompleted(parentId: String, result: Any) {
+    final override fun onParentCompleted(parentId: String, parentShareId: String?, result: Any) {
         if (parentId == this.parentId) {
             parentResult = result as P
         }

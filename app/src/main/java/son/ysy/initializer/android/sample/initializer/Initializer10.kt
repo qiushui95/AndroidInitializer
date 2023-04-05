@@ -6,6 +6,9 @@ import kotlin.reflect.KClass
 
 class Initializer10 : StringInitializer() {
 
+    override val groupName: String = "group"
+    override val groupSort: Int = 1
+
     override val parentClassList: List<KClass<*>>
         get() = listOf(Initializer5::class)
 

@@ -8,7 +8,7 @@ abstract class NoneParentInitializer<R> : AndroidInitializer<R>() {
         emptyList()
     }
 
-    final override fun onParentCompleted(parentId: String, result: Any) {
+    final override fun onParentCompleted(parentId: String, parentShareId: String?, result: Any) {
 
     }
 }

@@ -16,7 +16,7 @@ class ShareEndInitializer : ManyParentInitializer<Unit>() {
 
     }
 
-    override fun onParentCompleted(parentId: String, result: Any) {
+    override fun onParentCompleted(parentId: String, parentShareId: String?, result: Any) {
 
     }
 }
