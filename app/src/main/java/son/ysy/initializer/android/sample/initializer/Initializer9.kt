@@ -5,9 +5,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlin.reflect.KClass
 
 class Initializer9 : StringInitializer() {
-    override val priority: Int = 200
-
-    override val groupName: String = "1024"
 
     override val parentClassList: List<KClass<*>>
         get() = listOf(Initializer5::class)

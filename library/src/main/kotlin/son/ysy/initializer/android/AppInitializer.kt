@@ -94,8 +94,6 @@ internal object AppInitializer {
             list.initialize(initializerClass)
         }
 
-        list.sortBy { it.priority }
-
         val result = mutableMapOf<String, MutableList<Initializer<*>>>()
 
         list.forEach {
@@ -204,21 +202,14 @@ internal object AppInitializer {
         childrenMap: Map<Initializer<*>, Set<Initializer<*>>>,
     ): Map<Initializer<*>, Job> {
 
-        val result = mutableMapOf<Initializer<*>, Job>()
-
-        val groupJobMap = mutableMapOf<String?, MutableList<Job>>()
+        val resultMap = mutableMapOf<Initializer<*>, Job>()
 
         initializerMap.values.flatten().forEach { initializer ->
 
             val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-                val startTime = System.currentTimeMillis()
-
-                val threadNameStr = "thread:${Thread.currentThread().name}"
-
-                Log.d(LOG_TAG, "start:${initializer.id}-->$threadNameStr")
 
                 parentMap[initializer]
-                    ?.mapNotNull { result[it] }
+                    ?.mapNotNull { resultMap[it] }
                     ?.forEach {
                         it.join()
                     }
@@ -229,36 +220,33 @@ internal object AppInitializer {
                     initializer.dispatcher
                 }
 
-                val initResult = withContext(coroutineContext) { initializer.doInit(context) }
+                val startTime = System.currentTimeMillis()
+
+                val initializerKeyStr = "${initializer.id}(${initializer.javaClass.name})"
+
+                val initResult = withContext(coroutineContext) {
+                    val threadNameStr = "thread:${Thread.currentThread().name}"
+
+                    Log.d(LOG_TAG, "start:${initializerKeyStr}-->$threadNameStr")
+
+                    initializer.doInit(context)
+                }
 
                 val costTimeStr = "cost:${System.currentTimeMillis() - startTime}ms"
 
-                Log.d(LOG_TAG, "finish:${initializer.id}-->$costTimeStr-->$threadNameStr")
+                Log.d(LOG_TAG, "finish:${initializerKeyStr}-->$costTimeStr")
 
                 childrenMap[initializer]?.forEach {
                     it.onParentCompleted(initializer.id, initResult ?: Unit)
                 }
             }
 
-            result[initializer] = job
-
-            groupJobMap.getOrPut(initializer.groupName) { mutableListOf() }.add(job)
+            resultMap[initializer] = job
         }
 
-        groupJobMap.entries.forEach { entry ->
-            launch(Dispatchers.IO) {
+        resultMap.values.forEach { it.start() }
 
-                entry.value.forEach {
-                    it.start()
-
-                    if (entry.key != null) {
-                        it.join()
-                    }
-                }
-            }
-        }
-
-        return result
+        return resultMap
     }
 
     private fun logDepth(
@@ -288,9 +276,14 @@ internal object AppInitializer {
 
             allList.removeAll(curDepthList)
 
+
+            val curDepthIdStr = curDepthList.joinToString(",") { it.id }
+
+            Log.d(LOG_TAG, "depth:${depth}(id)-->[$curDepthIdStr]")
+
             val curDepthStr = curDepthList.joinToString(",") { it.javaClass.name }
 
-            Log.d(LOG_TAG, "depth:${depth++}-->[$curDepthStr]")
+            Log.d(LOG_TAG, "depth:${depth++}(class)-->[$curDepthStr]")
         }
     }
 }

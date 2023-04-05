@@ -10,17 +10,6 @@ internal interface Initializer<T> {
     val id: String
 
     /**
-     * 优先级,值越小越优先
-     */
-    val priority: Int
-
-    /**
-     * 组名
-     * 同一组内优先级值越小越优先
-     */
-    val groupName: String?
-
-    /**
      * 所依赖的父任务class
      * 当所有父任务完成后才执行该任务
      */

@@ -12,6 +12,7 @@ abstract class StringInitializer : AndroidInitializer<String>() {
     private val list = mutableListOf<String>()
 
     protected open val parentClassList = emptyList<KClass<*>>()
+    protected open val parentIdSequence = emptySequence<String>()
 
     final override val parentIdList: List<String>
         get() = parentClassList.map { it.java.simpleName }
