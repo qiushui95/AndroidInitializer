@@ -243,8 +243,7 @@ internal object AppInitializer {
 
                 for (childInitializer in initializer.childrenInitializerSet) {
                     childInitializer.onParentCompleted(
-                        parentId = initializer.id,
-                        parentShareId = initializer.shareId,
+                        parentIdList = initializer.idList,
                         result = initResult ?: Unit
                     )
                 }

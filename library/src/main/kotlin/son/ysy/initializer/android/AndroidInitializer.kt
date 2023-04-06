@@ -60,7 +60,7 @@ abstract class AndroidInitializer<T> {
     /**
      * 父任务完成回调
      */
-    abstract fun onParentCompleted(parentId: String, parentShareId: String?, result: Any)
+    abstract fun onParentCompleted(parentIdList: List<String>, result: Any)
 
     internal val parentInitializerSet = mutableSetOf<AndroidInitializer<*>>()
 
