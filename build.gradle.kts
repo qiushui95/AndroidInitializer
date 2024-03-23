@@ -5,12 +5,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.4.2")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.10")
-        classpath("com.vanniktech:gradle-maven-publish-plugin:0.25.1")
+        classpath("com.android.tools.build:gradle:8.3.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.23")
+        classpath("com.vanniktech:gradle-maven-publish-plugin:0.28.0")
     }
-}
-
-task("clean", Delete::class) {
-    delete = setOf(rootProject.buildDir)
 }
