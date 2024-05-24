@@ -5,10 +5,7 @@ import kotlin.reflect.KClass
 
 class Initializer7 : StringInitializer() {
 
-
-    override val groupName: String = "group"
-    override val groupSort: Int = 3
-
+    override val isAutoStart: Boolean = false
     override val parentClassList: List<KClass<*>>
         get() = listOf(Initializer5::class)
 

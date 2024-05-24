@@ -1,14 +1,12 @@
 package son.ysy.initializer.android.sample.initializer
 
 import android.app.Application
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 
 class Initializer2 : StringInitializer() {
+    override val isAutoStart: Boolean = true
 
-    override val dispatcher: CoroutineContext = Dispatchers.Main
+    override val runOnMainThread: Boolean = true
 
     override val needBlockingMain: Boolean = true
 
@@ -16,6 +14,6 @@ class Initializer2 : StringInitializer() {
         get() = listOf(Initializer1::class)
 
     override fun doSomeThing(context: Application) {
-        Thread.sleep(100)
+        Thread.sleep(3000)
     }
 }

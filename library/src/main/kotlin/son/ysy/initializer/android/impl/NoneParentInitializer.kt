@@ -2,13 +2,13 @@ package son.ysy.initializer.android.impl
 
 import son.ysy.initializer.android.AndroidInitializer
 
-abstract class NoneParentInitializer<R> : AndroidInitializer<R>() {
+public abstract class NoneParentInitializer<R> : AndroidInitializer<R>() {
 
     final override val parentIdList: List<String> by lazy {
         emptyList()
     }
 
-    final override fun onParentCompleted(parentIdList: List<String>, result: Any) {
+    final override fun receiveParentResult(parentIdList: List<String>, result: Any) {
 
     }
 }

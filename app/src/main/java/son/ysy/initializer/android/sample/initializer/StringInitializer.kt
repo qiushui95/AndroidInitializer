@@ -19,9 +19,15 @@ abstract class StringInitializer : AndroidInitializer<String>() {
 
     override fun doInit(context: Application): String {
 
-        Log.e("=====doInit====", "start $id,${javaClass.simpleName},thread:${Thread.currentThread().name}")
+        Log.e(
+            "=====doInit====",
+            "start $id,${javaClass.simpleName},thread:${Thread.currentThread().name}"
+        )
         doSomeThing(context)
-        Log.e("=====doInit====", "end $id,${javaClass.simpleName},thread:${Thread.currentThread().name}")
+        Log.e(
+            "=====doInit====",
+            "end $id,${javaClass.simpleName},thread:${Thread.currentThread().name}"
+        )
 
         Log.e("=====parent params====", "$id,${javaClass.simpleName},${parentIdList}")
 
@@ -30,7 +36,7 @@ abstract class StringInitializer : AndroidInitializer<String>() {
 
     abstract fun doSomeThing(context: Application)
 
-    override fun onParentCompleted(parentIdList: List<String>, result: Any) {
+    override fun receiveParentResult(parentIdList: List<String>, result: Any) {
         if (result is String) list.add(result)
     }
 }

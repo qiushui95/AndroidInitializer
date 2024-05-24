@@ -3,7 +3,7 @@ package son.ysy.initializer.android.impl
 import son.ysy.initializer.android.AndroidInitializer
 import kotlin.reflect.KClass
 
-abstract class ManyParentInitializer<R> : AndroidInitializer<R>() {
+public abstract class ManyParentInitializer<R> : AndroidInitializer<R>() {
 
     final override val parentIdList: List<String> by lazy {
         (getParentIdList() + (getParentClassList() + getParentKClassList().map { it.java }).map { it.name }).toList()

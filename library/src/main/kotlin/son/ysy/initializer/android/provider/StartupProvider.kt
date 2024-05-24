@@ -12,7 +12,7 @@ internal class StartupProvider : ContentProvider() {
 
     override fun onCreate(): Boolean {
 
-        (context as? Application)?.apply(AppInitializer::startInit)
+        (context as? Application)?.apply(AppInitializer::startAutoInit)
 
         return true
     }

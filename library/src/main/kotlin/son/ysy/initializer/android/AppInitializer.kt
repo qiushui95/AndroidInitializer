@@ -6,18 +6,34 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
-import kotlin.coroutines.CoroutineContext
 
-internal object AppInitializer {
+private typealias Initializer<T> = AndroidInitializer<T>
+
+private const val TAG_AUTO = "auto"
+private const val TAG_MANUAL = "manual"
+
+public object AppInitializer {
 
     private const val LOG_TAG = "--initializer--"
 
-    private val initializerCoroutine = CoroutineScope(Dispatchers.Main)
+    private val initializerCoroutine = CoroutineScope(Dispatchers.IO)
 
-    fun startInit(context: Application) = runBlocking {
+    private val manualList = mutableListOf<Initializer<*>>()
+    private fun logD(msg: String) {
+
+        Log.d(LOG_TAG, msg)
+    }
+
+    internal fun startAutoInit(context: Application) = runBlocking {
 
         val initializerClassSet = discoverInitializerClass(context)
 
@@ -25,22 +41,30 @@ internal object AppInitializer {
 
         checkSameId(initializerList)
 
-        val initializerIdMap = getInitializerIdMap(initializerList)
-
-        findParent(initializerList, initializerIdMap)
+        handleInitializerParentAndChildren(initializerList)
 
         checkCycle(initializerList)
 
-        logDepth(initializerList)
+        handleInitializerAutoStart(initializerList)
 
-        val jobMap = initializerCoroutine
-            .prepareJob(context, coroutineContext, initializerList)
+        val autoList = initializerList.filter { it.canAutoStart }
+        val manualList = initializerList.filter { it.canAutoStart.not() }
 
-        jobMap.filterKeys { it.needBlockingMain }
-            .values
-            .forEach {
-                it.join()
-            }
+        checkManualList(manualList)
+
+        logDepth(TAG_AUTO, autoList)
+        logDepth(TAG_MANUAL, manualList)
+
+        AppInitializer.manualList.addAll(manualList)
+
+        startInit(TAG_AUTO, this, context, autoList)
+    }
+
+    public fun startManualInit(app: Application): Job = initializerCoroutine.launch {
+
+        startInit(TAG_MANUAL, this, app, manualList)
+
+        manualList.clear()
     }
 
     private fun discoverInitializerClass(context: Context): Set<Class<*>> {
@@ -52,11 +76,7 @@ internal object AppInitializer {
                 PackageManager.ComponentInfoFlags.of(PackageManager.GET_META_DATA.toLong())
             )
         } else {
-            @Suppress("DEPRECATION")
-            context.packageManager.getProviderInfo(
-                provider,
-                PackageManager.GET_META_DATA
-            )
+            context.packageManager.getProviderInfo(provider, PackageManager.GET_META_DATA)
         }
 
         val classSet = mutableSetOf<Class<*>>()
@@ -64,7 +84,7 @@ internal object AppInitializer {
         val metadata = providerInfo.metaData ?: return classSet
 
         val initializerValue = context.getString(R.string.initializer_start_up)
-        val initializerClass = AndroidInitializer::class.java
+        val initializerClass = Initializer::class.java
 
         for (key in metadata.keySet()) {
             val value = metadata.getString(key) ?: continue
@@ -86,10 +106,10 @@ internal object AppInitializer {
         return classSet
     }
 
-    private fun MutableList<AndroidInitializer<*>>.initialize(clz: Class<*>) {
+    private fun MutableList<Initializer<*>>.initialize(clz: Class<*>) {
 
         val initializer = try {
-            clz.getDeclaredConstructor().newInstance() as AndroidInitializer<*>
+            clz.getDeclaredConstructor().newInstance() as Initializer<*>
         } catch (e: Exception) {
             throw InitializerException(e)
         }
@@ -97,9 +117,9 @@ internal object AppInitializer {
         add(initializer)
     }
 
-    private fun doInitialize(initializerClassSet: Set<Class<*>>): List<AndroidInitializer<*>> {
+    private fun doInitialize(initializerClassSet: Set<Class<*>>): List<Initializer<*>> {
 
-        val list = mutableListOf<AndroidInitializer<*>>()
+        val list = mutableListOf<Initializer<*>>()
 
         for (initializerClass in initializerClassSet) {
             list.initialize(initializerClass)
@@ -108,19 +128,7 @@ internal object AppInitializer {
         return list
     }
 
-    private fun getInitializerIdMap(initializerList: List<AndroidInitializer<*>>): Map<String, Set<AndroidInitializer<*>>> {
-        val resultMap = mutableMapOf<String, MutableSet<AndroidInitializer<*>>>()
-
-        for (initializer in initializerList) {
-            for (id in initializer.idList) {
-                resultMap.getOrPut(id) { mutableSetOf() }.add(initializer)
-            }
-        }
-
-        return resultMap
-    }
-
-    private fun checkSameId(initializerList: List<AndroidInitializer<*>>) {
+    private fun checkSameId(initializerList: List<Initializer<*>>) {
         val sameIdMap = initializerList.groupBy { it.id }.filterValues { it.size > 1 }
 
         if (sameIdMap.isNotEmpty()) {
@@ -142,122 +150,146 @@ internal object AppInitializer {
         }
     }
 
-    private fun findParent(
-        initializerList: List<AndroidInitializer<*>>,
-        initializerIdMap: Map<String, Set<AndroidInitializer<*>>>
-    ) {
+    private fun getInitializerIdMap(initializerList: List<Initializer<*>>): Map<String, MutableSet<Initializer<*>>> {
+        val initializerIdMap = mutableMapOf<String, MutableSet<Initializer<*>>>()
 
         for (initializer in initializerList) {
+            for (id in initializer.idList) {
+                initializerIdMap.getOrPut(id) { mutableSetOf() }.add(initializer)
+            }
+        }
+
+        return initializerIdMap
+    }
+
+    private fun handleInitializerParentAndChildren(initializerList: List<Initializer<*>>) {
+        val initializerIdMap = getInitializerIdMap(initializerList)
+
+        for (initializer in initializerList) {
+
             for (parentId in initializer.parentIdList) {
+                val parentSet = initializerIdMap[parentId]
 
-                val parentInitializerSet = initializerIdMap[parentId]
-
-                if (parentInitializerSet == null) {
-                    throw InitializerException("initializer not find which id is '$parentId',${initializer::class.qualifiedName} need it.")
-                } else {
-                    initializer.parentInitializerSet.addAll(parentInitializerSet)
+                if (parentSet.isNullOrEmpty()) {
+                    throw InitializerException.parentNoFind(parentId, initializer)
                 }
-            }
-        }
 
-        val groupMap = initializerList.groupBy { it.groupName }
+                initializer.parentInitializerSet.addAll(parentSet)
 
-        for (list in groupMap.values) {
-            for (initializer in list) {
-                for (beforeInitializer in list.filter { it.groupSort < initializer.groupSort }) {
-                    initializer.parentInitializerSet.add(beforeInitializer)
+                for (parentInitializer in parentSet) {
+                    parentInitializer.childrenInitializerSet.add(initializer)
                 }
-            }
-        }
-
-        for (initializer in initializerList) {
-            for (parentInitializer in initializer.parentInitializerSet) {
-                parentInitializer.childrenInitializerSet.add(initializer)
             }
         }
     }
 
-    private fun checkCycle(initializerList: List<AndroidInitializer<*>>) {
+    private fun handleInitializerAutoStart(initializerList: List<Initializer<*>>) {
         for (initializer in initializerList) {
-            checkInitializerCycle(initializer.id, initializer, listOf(initializer))
+            initializer.canAutoStart = getInitialAutoStart(initializer)
         }
     }
 
-    private fun checkInitializerCycle(
-        initializerId: String,
-        initializer: AndroidInitializer<*>,
-        dependencyList: List<AndroidInitializer<*>>
+    private fun getInitialAutoStart(initializer: Initializer<*>): Boolean {
+        if (initializer.isAutoStart.not()) return false
+
+        for (parentInitializer in initializer.parentInitializerSet) {
+            if (parentInitializer.isAutoStart.not()) return false
+        }
+
+        return true
+    }
+
+    private fun checkCycle(initializerList: List<Initializer<*>>) {
+        for (initializer in initializerList) {
+            checkCycle(initializer.idList, initializer, listOf(initializer))
+        }
+    }
+
+    private fun checkCycle(
+        idList: List<String>,
+        initializer: Initializer<*>,
+        dependencyList: List<Initializer<*>>
     ) {
 
         for (parentInitializer in initializer.parentInitializerSet) {
-            val list = mutableListOf<AndroidInitializer<*>>()
+            val list = mutableListOf<Initializer<*>>()
 
             list.addAll(dependencyList)
             list.add(parentInitializer)
 
-            if (parentInitializer.id == initializerId) {
+            if (parentInitializer.idList.any { it in idList }) {
                 throw InitializerException("存在环依赖,依赖路径:${list.joinToString("->") { it.javaClass.name }}")
             }
 
-            checkInitializerCycle(initializerId, parentInitializer, list)
+            checkCycle(idList, parentInitializer, list)
         }
     }
 
-    private fun CoroutineScope.prepareJob(
+    private suspend fun startInit(
+        tag: String,
+        startScope: CoroutineScope,
         context: Application,
-        mainContext: CoroutineContext,
-        initializerList: List<AndroidInitializer<*>>,
-    ): Map<AndroidInitializer<*>, Job> {
+        initializerList: List<Initializer<*>>,
+    ) {
 
-        val resultMap = mutableMapOf<AndroidInitializer<*>, Job>()
+        val isManual = tag == TAG_MANUAL
 
-        initializerList.forEach { initializer ->
+        initializerList.map { it to createInitJob(isManual, startScope, context, it) }
+            .onEach { (initializer, job) ->
+                initializer.childrenInitializerSet.forEach { it.parentJobSet.add(job) }
+            }.onEach { (_, job) -> job.start() }
+            .filter { (initializer, _) -> initializer.needBlockingMain || isManual }
+            .forEach { (_, job) -> job.join() }
 
-            val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-
-                for (parentInitializer in initializer.parentInitializerSet) {
-                    resultMap[parentInitializer]?.join()
-                }
-
-                val coroutineContext = if (initializer.dispatcher == Dispatchers.Main) {
-                    mainContext
-                } else {
-                    initializer.dispatcher
-                }
-
-                val startTime = System.currentTimeMillis()
-
-                val initializerKeyStr = "${initializer.id}(${initializer.javaClass.name})"
-
-                val initResult = withContext(coroutineContext) {
-                    val threadNameStr = "thread:${Thread.currentThread().name}"
-
-                    Log.d(LOG_TAG, "start:${initializerKeyStr}-->$threadNameStr")
-
-                    initializer.doInit(context)
-                }
-
-                val costTimeStr = "cost:${System.currentTimeMillis() - startTime}ms"
-
-                Log.d(LOG_TAG, "finish:${initializerKeyStr}-->$costTimeStr")
-
-                for (childInitializer in initializer.childrenInitializerSet) {
-                    childInitializer.onParentCompleted(
-                        parentIdList = initializer.idList,
-                        result = initResult ?: Unit
-                    )
-                }
-            }
-
-            resultMap[initializer] = job
-        }
-
-        resultMap.values.forEach { it.start() }
-
-        return resultMap
+        logD("all $tag blocking main finish")
     }
 
-    private fun logDepth(initializerList: List<AndroidInitializer<*>>) {
+    private fun createInitJob(
+        isManual: Boolean,
+        startScope: CoroutineScope,
+        context: Application,
+        initializer: Initializer<*>
+    ): Job = initializerCoroutine.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+        for (job in initializer.parentJobSet) {
+            job.join()
+        }
+
+        val initContext = if (initializer.runOnMainThread && isManual) {
+            Dispatchers.Main
+        } else if (initializer.runOnMainThread) {
+            startScope.coroutineContext
+        } else {
+            Dispatchers.IO
+        }
+
+        val startTime = System.currentTimeMillis()
+
+        val initializerKeyStr = "${initializer.id}(${initializer.javaClass.name})"
+
+        val initResult = withContext(initContext) {
+            val threadNameStr = "thread:${Thread.currentThread().name}"
+            logD("start:${initializerKeyStr}-->$threadNameStr")
+            initializer.doInit(context)
+        }
+
+        val costTimeStr = "cost:${System.currentTimeMillis() - startTime}ms"
+
+        logD("finish:${initializerKeyStr}-->$costTimeStr")
+
+        for (childInitializer in initializer.childrenInitializerSet) {
+            childInitializer.receiveParentResult(initializer.idList, initResult ?: Unit)
+        }
+    }
+
+    private fun checkManualList(list: List<Initializer<*>>) {
+        for (initializer in list) {
+            if (initializer.needBlockingMain) {
+                throw InitializerException("manual initializer can not block main thread(${initializer.javaClass.name})")
+            }
+        }
+    }
+
+    private fun logDepth(tag: String, initializerList: List<Initializer<*>>) {
 
         val allList = initializerList.toMutableList()
 
@@ -265,7 +297,7 @@ internal object AppInitializer {
 
         while (allList.size > 0) {
 
-            val curDepthList = mutableListOf<AndroidInitializer<*>>()
+            val curDepthList = mutableListOf<Initializer<*>>()
 
             for (initializer in allList) {
 
@@ -280,11 +312,7 @@ internal object AppInitializer {
 
             val curDepthIdStr = curDepthList.joinToString(",") { it.id }
 
-            Log.d(LOG_TAG, "depth:${depth}(id)-->[$curDepthIdStr]")
-
-            val curDepthStr = curDepthList.joinToString(",") { it.javaClass.name }
-
-            Log.d(LOG_TAG, "depth:${depth++}(class)-->[$curDepthStr]")
+            logD("depth($tag):${depth++}-->[$curDepthIdStr]")
         }
     }
 }

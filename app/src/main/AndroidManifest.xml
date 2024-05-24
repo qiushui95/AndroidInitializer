@@ -22,36 +22,36 @@
             android:name="son.ysy.initializer.android.provider.StartupProvider"
             android:authorities="${applicationId}.androidx_start"
             android:exported="false">
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer1"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer2"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer3"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer4"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer5"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer8"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer6"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer7"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer9"
-                            android:value="@string/initializer_start_up" />
-                        <meta-data
-                            android:name="${packageName}.initializer.Initializer10"
-                            android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer1"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer2"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer3"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer4"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer5"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer8"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer6"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer7"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer9"
+                android:value="@string/initializer_start_up" />
+            <meta-data
+                android:name="${packageName}.initializer.Initializer10"
+                android:value="@string/initializer_start_up" />
 
             <meta-data
                 android:name="${packageName}.initializer.share.ShareEndInitializer"

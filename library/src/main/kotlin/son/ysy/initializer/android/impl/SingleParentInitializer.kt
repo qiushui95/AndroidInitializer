@@ -2,9 +2,9 @@ package son.ysy.initializer.android.impl
 
 import son.ysy.initializer.android.AndroidInitializer
 
-abstract class SingleParentInitializer<R, P : Any> : AndroidInitializer<R>() {
+public abstract class SingleParentInitializer<R, P : Any> : AndroidInitializer<R>() {
 
-    abstract val parentId: String
+    protected abstract val parentId: String
 
     protected lateinit var parentResult: P
 
@@ -13,7 +13,7 @@ abstract class SingleParentInitializer<R, P : Any> : AndroidInitializer<R>() {
     }
 
     @Suppress("UNCHECKED_CAST")
-    final override fun onParentCompleted(parentIdList: List<String>, result: Any) {
+    override fun receiveParentResult(parentIdList: List<String>, result: Any) {
         if (parentId in parentIdList) {
             parentResult = result as P
         }

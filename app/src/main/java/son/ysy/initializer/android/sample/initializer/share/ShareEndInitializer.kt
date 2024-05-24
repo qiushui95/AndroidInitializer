@@ -5,6 +5,7 @@ import android.util.Log
 import son.ysy.initializer.android.impl.ManyParentInitializer
 
 class ShareEndInitializer : ManyParentInitializer<Unit>() {
+    override val isAutoStart: Boolean = true
     override fun getParentIdList(): Sequence<String> {
         return sequenceOf("shareId")
     }
@@ -16,7 +17,7 @@ class ShareEndInitializer : ManyParentInitializer<Unit>() {
 
     }
 
-    override fun onParentCompleted(parentIdList: List<String>, result: Any) {
+    override fun receiveParentResult(parentIdList: List<String>, result: Any) {
 
     }
 }
