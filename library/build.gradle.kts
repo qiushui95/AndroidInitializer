@@ -6,12 +6,6 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
-//mavenPublishing {
-//    afterEvaluate {
-//        configure(AndroidLibrary(JavadocJar.Javadoc(), true))
-//    }
-//}
-
 task("updateVersion") {
     doFirst {
         val properties = Properties()
@@ -40,7 +34,6 @@ android {
     defaultConfig {
         minSdk = 16
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -59,10 +52,6 @@ android {
 
 dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
 
