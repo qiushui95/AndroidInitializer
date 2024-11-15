@@ -48,7 +48,7 @@ public abstract class AndroidInitializer<T> {
     /**
      * 初始化任务
      */
-    public abstract fun doInit(context: Application): T
+    public abstract suspend fun doInit(context: Application): T
 
     /**
      * 父任务完成回调
