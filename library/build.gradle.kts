@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.konan.properties.Properties
 
 plugins {
@@ -38,25 +39,27 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
+
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "21"
     }
+
     sourceSets {
         getByName("main").java.srcDir("src/main/kotlin")
     }
+
     namespace = "son.ysy.initializer.android"
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
 
-
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-
-    kotlinOptions.freeCompilerArgs += "-Xexplicit-api=strict"
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xexplicit-api=strict")
+    }
 }
