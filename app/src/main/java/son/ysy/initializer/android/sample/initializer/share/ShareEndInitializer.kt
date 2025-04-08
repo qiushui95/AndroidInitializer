@@ -10,7 +10,7 @@ class ShareEndInitializer : ManyParentInitializer<Unit>() {
         return sequenceOf("shareId")
     }
 
-    override fun doInit(context: Application) {
+    override suspend fun doInit(context: Application) {
         Log.e("=====doInit==== ", "--start--")
         Thread.sleep(1000)
         Log.e("=====doInit==== ", "---end---")

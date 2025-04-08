@@ -17,7 +17,7 @@ abstract class StringInitializer : AndroidInitializer<String>() {
     final override val parentIdList: List<String>
         get() = parentClassList.map { it.java.simpleName }
 
-    override fun doInit(context: Application): String {
+    override suspend fun doInit(context: Application): String {
 
         Log.e(
             "=====doInit====",

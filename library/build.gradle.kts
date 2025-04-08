@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.konan.properties.Properties
 
 plugins {
@@ -7,7 +6,7 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
-task("updateVersion") {
+tasks.register("updateVersion") {
     doFirst {
         val properties = Properties()
 
@@ -30,7 +29,7 @@ task("updateVersion") {
 }
 
 android {
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 16
@@ -55,7 +54,7 @@ android {
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
 }
 
 kotlin {
