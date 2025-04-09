@@ -4,6 +4,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     id("com.vanniktech.maven.publish")
+    id("com.diffplug.spotless")
 }
 
 tasks.register("updateVersion") {
@@ -60,5 +61,24 @@ dependencies {
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xexplicit-api=strict")
+    }
+}
+
+spotless {
+    kotlin {
+        target("**/*.kt")
+        targetExclude("**/build/**/*.kt")
+        endWithNewline()
+        leadingTabsToSpaces()
+        trimTrailingWhitespace()
+        ktlint("1.5.0")
+    }
+    format("kts") {
+        target("**/*.kts")
+        targetExclude("**/build/**/*.kts")
+    }
+    format("xml") {
+        target("**/*.xml")
+        targetExclude("**/build/**/*.xml")
     }
 }
