@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -27,10 +28,27 @@ public object AppInitializer {
 
     private val initializerCoroutine = CoroutineScope(Dispatchers.IO)
 
+    private val autoList = mutableListOf<Initializer<*>>()
     private val manualList = mutableListOf<Initializer<*>>()
-    private fun logD(msg: String) {
 
+    private val discoverJob by lazy { SupervisorJob() }
+    private val initializerJob by lazy { SupervisorJob() }
+
+    private fun logD(msg: String) {
         Log.d(LOG_TAG, msg)
+    }
+
+    public suspend fun isAllFinish(): Boolean {
+        discoverJob.join()
+
+        if (autoList.isNotEmpty()) return false
+        if (manualList.isNotEmpty()) return false
+
+        return true
+    }
+
+    public suspend fun waitAllFinish() {
+        initializerJob.join()
     }
 
     internal fun startAutoInit(context: Application) = runBlocking {
@@ -55,7 +73,10 @@ public object AppInitializer {
         logDepth(TAG_AUTO, autoList)
         logDepth(TAG_MANUAL, manualList)
 
+        AppInitializer.autoList.addAll(autoList)
         AppInitializer.manualList.addAll(manualList)
+
+        discoverJob.complete()
 
         startInit(TAG_AUTO, this, context, autoList)
     }
@@ -63,18 +84,15 @@ public object AppInitializer {
     public fun startManualInit(app: Application): Job = initializerCoroutine.launch {
 
         startInit(TAG_MANUAL, this, app, manualList)
-
-        manualList.clear()
     }
 
     private fun discoverInitializerClass(context: Context): Set<Class<*>> {
         val provider = ComponentName(context.packageName, StartupProvider::class.java.name)
 
         val providerInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.packageManager.getProviderInfo(
-                provider,
-                PackageManager.ComponentInfoFlags.of(PackageManager.GET_META_DATA.toLong())
-            )
+            val flags = PackageManager.ComponentInfoFlags.of(PackageManager.GET_META_DATA.toLong())
+
+            context.packageManager.getProviderInfo(provider, flags)
         } else {
             context.packageManager.getProviderInfo(provider, PackageManager.GET_META_DATA)
         }
@@ -279,6 +297,11 @@ public object AppInitializer {
         for (childInitializer in initializer.childrenInitializerSet) {
             childInitializer.receiveParentResult(initializer.idList, initResult ?: Unit)
         }
+
+        autoList.remove(initializer)
+        manualList.remove(initializer)
+
+        if (isAllFinish()) initializerJob.complete()
     }
 
     private fun checkManualList(list: List<Initializer<*>>) {
