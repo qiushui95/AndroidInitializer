@@ -4,10 +4,12 @@ import son.ysy.initializer.android.AndroidInitializer
 import kotlin.reflect.KClass
 
 public abstract class ManyParentInitializer<R> : AndroidInitializer<R>() {
-
     final override val parentIdList: List<String> by lazy {
-        (getParentIdList() + (getParentClassList() + getParentKClassList().map { it.java }).map { it.name }).toList()
-            .distinct()
+        val idList = getParentIdList()
+        val clzList = getParentClassList()
+        val clzListK = getParentKClassList().map { it.java }
+
+        (idList + (clzList + clzListK).map { it.name }).distinct().toList()
     }
 
     protected open fun getParentIdList(): Sequence<String> {
@@ -21,5 +23,4 @@ public abstract class ManyParentInitializer<R> : AndroidInitializer<R>() {
     protected open fun getParentKClassList(): Sequence<KClass<*>> {
         return emptySequence()
     }
-
 }

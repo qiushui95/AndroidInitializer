@@ -4,7 +4,6 @@ import android.app.Application
 import kotlinx.coroutines.Job
 
 public abstract class AndroidInitializer<T> {
-
     public open val id: String = javaClass.name
 
     protected open val shareId: String? = null

@@ -18,12 +18,12 @@ import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
 
 private typealias Initializer<T> = AndroidInitializer<T>
+private typealias InitializerList<T> = List<Initializer<T>>
 
 private const val TAG_AUTO = "auto"
 private const val TAG_MANUAL = "manual"
 
 public object AppInitializer {
-
     private const val LOG_TAG = "--initializer--"
 
     private val initializerCoroutine = CoroutineScope(Dispatchers.IO)
@@ -52,7 +52,6 @@ public object AppInitializer {
     }
 
     internal fun startAutoInit(context: Application) = runBlocking {
-
         val initializerClassSet = discoverInitializerClass(context)
 
         val initializerList = doInitialize(initializerClassSet)
@@ -82,7 +81,6 @@ public object AppInitializer {
     }
 
     public fun startManualInit(app: Application): Job = initializerCoroutine.launch {
-
         startInit(TAG_MANUAL, this, app, manualList)
     }
 
@@ -115,7 +113,6 @@ public object AppInitializer {
 
                     classSet.add(clz)
                 } catch (e: Exception) {
-
                     throw InitializerException(e)
                 }
             }
@@ -125,7 +122,6 @@ public object AppInitializer {
     }
 
     private fun MutableList<Initializer<*>>.initialize(clz: Class<*>) {
-
         val initializer = try {
             clz.getDeclaredConstructor().newInstance() as Initializer<*>
         } catch (e: Exception) {
@@ -135,8 +131,7 @@ public object AppInitializer {
         add(initializer)
     }
 
-    private fun doInitialize(initializerClassSet: Set<Class<*>>): List<Initializer<*>> {
-
+    private fun doInitialize(initializerClassSet: Set<Class<*>>): InitializerList<*> {
         val list = mutableListOf<Initializer<*>>()
 
         for (initializerClass in initializerClassSet) {
@@ -146,7 +141,7 @@ public object AppInitializer {
         return list
     }
 
-    private fun checkSameId(initializerList: List<Initializer<*>>) {
+    private fun checkSameId(initializerList: InitializerList<*>) {
         val sameIdMap = initializerList.groupBy { it.id }.filterValues { it.size > 1 }
 
         if (sameIdMap.isNotEmpty()) {
@@ -168,10 +163,10 @@ public object AppInitializer {
         }
     }
 
-    private fun getInitializerIdMap(initializerList: List<Initializer<*>>): Map<String, MutableSet<Initializer<*>>> {
+    private fun getIdMap(list: InitializerList<*>): Map<String, MutableSet<Initializer<*>>> {
         val initializerIdMap = mutableMapOf<String, MutableSet<Initializer<*>>>()
 
-        for (initializer in initializerList) {
+        for (initializer in list) {
             for (id in initializer.idList) {
                 initializerIdMap.getOrPut(id) { mutableSetOf() }.add(initializer)
             }
@@ -181,10 +176,9 @@ public object AppInitializer {
     }
 
     private fun handleInitializerParentAndChildren(initializerList: List<Initializer<*>>) {
-        val initializerIdMap = getInitializerIdMap(initializerList)
+        val initializerIdMap = getIdMap(initializerList)
 
         for (initializer in initializerList) {
-
             for (parentId in initializer.parentIdList) {
                 val parentSet = initializerIdMap[parentId]
 
@@ -226,9 +220,8 @@ public object AppInitializer {
     private fun checkCycle(
         idList: List<String>,
         initializer: Initializer<*>,
-        dependencyList: List<Initializer<*>>
+        dependencyList: List<Initializer<*>>,
     ) {
-
         for (parentInitializer in initializer.parentInitializerSet) {
             val list = mutableListOf<Initializer<*>>()
 
@@ -236,7 +229,8 @@ public object AppInitializer {
             list.add(parentInitializer)
 
             if (parentInitializer.idList.any { it in idList }) {
-                throw InitializerException("存在环依赖,依赖路径:${list.joinToString("->") { it.javaClass.name }}")
+                val path = list.joinToString("->") { it.javaClass.name }
+                throw InitializerException("存在环依赖,依赖路径:$path")
             }
 
             checkCycle(idList, parentInitializer, list)
@@ -249,7 +243,6 @@ public object AppInitializer {
         context: Application,
         initializerList: List<Initializer<*>>,
     ) {
-
         val isManual = tag == TAG_MANUAL
 
         initializerList.map { it to createInitJob(isManual, startScope, context, it) }
@@ -266,7 +259,7 @@ public object AppInitializer {
         isManual: Boolean,
         startScope: CoroutineScope,
         context: Application,
-        initializer: Initializer<*>
+        initializer: Initializer<*>,
     ): Job = initializerCoroutine.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
         for (job in initializer.parentJobSet) {
             job.join()
@@ -286,13 +279,13 @@ public object AppInitializer {
 
         val initResult = withContext(initContext) {
             val threadNameStr = "thread:${Thread.currentThread().name}"
-            logD("start:${initializerKeyStr}-->$threadNameStr")
+            logD("start:$initializerKeyStr-->$threadNameStr")
             initializer.doInit(context)
         }
 
         val costTimeStr = "cost:${System.currentTimeMillis() - startTime}ms"
 
-        logD("finish:${initializerKeyStr}-->$costTimeStr")
+        logD("finish:$initializerKeyStr-->$costTimeStr")
 
         for (childInitializer in initializer.childrenInitializerSet) {
             childInitializer.receiveParentResult(initializer.idList, initResult ?: Unit)
@@ -307,31 +300,29 @@ public object AppInitializer {
     private fun checkManualList(list: List<Initializer<*>>) {
         for (initializer in list) {
             if (initializer.needBlockingMain) {
-                throw InitializerException("manual initializer can not block main thread(${initializer.javaClass.name})")
+                val msgBuilder = StringBuilder()
+                msgBuilder.append("manual initializer can not block main thread")
+                msgBuilder.append("(${initializer.javaClass.name})")
+                throw InitializerException(msgBuilder.toString())
             }
         }
     }
 
     private fun logDepth(tag: String, initializerList: List<Initializer<*>>) {
-
         val allList = initializerList.toMutableList()
 
         var depth = 0
 
         while (allList.size > 0) {
-
             val curDepthList = mutableListOf<Initializer<*>>()
 
             for (initializer in allList) {
-
                 if (initializer.parentInitializerSet.none { it in allList }) {
                     curDepthList.add(initializer)
                 }
             }
 
-
             allList.removeAll(curDepthList)
-
 
             val curDepthIdStr = curDepthList.joinToString(",") { it.id }
 

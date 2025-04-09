@@ -6,7 +6,7 @@ internal class InitializerException : RuntimeException {
     companion object {
         fun parentNoFind(
             parentId: String,
-            initializer: AndroidInitializer<*>
+            initializer: AndroidInitializer<*>,
         ): InitializerException {
             val msgSB = StringBuilder()
 

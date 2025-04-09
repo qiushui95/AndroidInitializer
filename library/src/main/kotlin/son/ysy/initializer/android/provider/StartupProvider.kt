@@ -7,11 +7,8 @@ import android.database.Cursor
 import android.net.Uri
 import son.ysy.initializer.android.AppInitializer
 
-
 internal class StartupProvider : ContentProvider() {
-
     override fun onCreate(): Boolean {
-
         (context as? Application)?.apply(AppInitializer::startAutoInit)
 
         return true
@@ -26,7 +23,7 @@ internal class StartupProvider : ContentProvider() {
         projection: Array<out String>?,
         selection: String?,
         selectionArgs: Array<out String>?,
-        sortOrder: String?
+        sortOrder: String?,
     ): Cursor? {
         return null
     }
@@ -35,7 +32,7 @@ internal class StartupProvider : ContentProvider() {
         uri: Uri,
         values: ContentValues?,
         selection: String?,
-        selectionArgs: Array<out String>?
+        selectionArgs: Array<out String>?,
     ): Int {
         throw IllegalStateException("Not allowed.")
     }

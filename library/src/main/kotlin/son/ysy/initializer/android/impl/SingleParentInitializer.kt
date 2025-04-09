@@ -3,7 +3,6 @@ package son.ysy.initializer.android.impl
 import son.ysy.initializer.android.AndroidInitializer
 
 public abstract class SingleParentInitializer<R, P : Any> : AndroidInitializer<R>() {
-
     protected abstract val parentId: String
 
     protected lateinit var parentResult: P
