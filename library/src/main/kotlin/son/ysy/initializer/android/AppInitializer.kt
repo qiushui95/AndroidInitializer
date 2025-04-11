@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,8 @@ public object AppInitializer {
     private val manualList = mutableListOf<Initializer<*>>()
 
     private val discoverJob by lazy { SupervisorJob() }
-    private val initializerJob by lazy { SupervisorJob() }
+    private val autoInitializeJob by lazy { SupervisorJob() }
+    private val manualInitializeJob by lazy { SupervisorJob() }
 
     private fun logD(msg: String) {
         Log.d(LOG_TAG, msg)
@@ -41,14 +43,16 @@ public object AppInitializer {
     public suspend fun isAllFinish(): Boolean {
         discoverJob.join()
 
-        if (autoList.isNotEmpty()) return false
-        if (manualList.isNotEmpty()) return false
+        return autoInitializeJob.isCompleted && manualInitializeJob.isCompleted
+    }
 
-        return true
+    public suspend fun waitAutoFinish() {
+        autoInitializeJob.join()
     }
 
     public suspend fun waitAllFinish() {
-        initializerJob.join()
+        waitAutoFinish()
+        manualInitializeJob.join()
     }
 
     internal fun startAutoInit(context: Application) = runBlocking {
@@ -294,7 +298,14 @@ public object AppInitializer {
         autoList.remove(initializer)
         manualList.remove(initializer)
 
-        if (isAllFinish()) initializerJob.complete()
+        if (autoList.isEmpty()) completeJob(autoInitializeJob)
+        if (manualList.isEmpty()) completeJob(manualInitializeJob)
+    }
+
+    private fun completeJob(job: CompletableJob) {
+        if (job.isCompleted) return
+
+        job.complete()
     }
 
     private fun checkManualList(list: List<Initializer<*>>) {
