@@ -55,7 +55,7 @@ android {
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }
 
 kotlin {
