@@ -14,6 +14,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import son.ysy.initializer.android.execption.InitializerException
 import son.ysy.initializer.android.provider.StartupProvider
@@ -39,6 +41,8 @@ public object AppInitializer {
     private fun logD(msg: String) {
         Log.d(LOG_TAG, msg)
     }
+
+    private val mutex by lazy { Mutex() }
 
     public suspend fun isAllFinish(): Boolean {
         discoverJob.join()
@@ -295,8 +299,10 @@ public object AppInitializer {
             childInitializer.receiveParentResult(initializer.idList, initResult ?: Unit)
         }
 
-        autoList.remove(initializer)
-        manualList.remove(initializer)
+        mutex.withLock {
+            autoList.remove(initializer)
+            manualList.remove(initializer)
+        }
 
         if (autoList.isEmpty()) completeJob(autoInitializeJob)
         if (manualList.isEmpty()) completeJob(manualInitializeJob)
